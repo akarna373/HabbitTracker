@@ -1,0 +1,58 @@
+import { router } from "expo-router";
+import { ScrollView, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ListRow } from "../../components/ListRow";
+import { PrimaryButton } from "../../components/PrimaryButton";
+import { ScreenHeader } from "../../components/ScreenHeader";
+import { useDraftStore } from "../../lib/draftStore";
+import { CUSTOM_GOOD_TEMPLATE_ID, GOOD_TEMPLATES } from "../../lib/templates";
+import { colors, spacing } from "../../lib/theme";
+
+export default function GoodTemplatesScreen() {
+  const set = useDraftStore((s) => s.set);
+
+  const chooseTemplate = (templateId: string) => {
+    const template = GOOD_TEMPLATES.find((t) => t.id === templateId);
+    if (!template) return;
+    set({
+      templateId: template.id,
+      name: template.name,
+      trackingMethod: "amount",
+      targetAmount: template.targetAmount,
+      unit: template.unit,
+      microtasks: template.microtasks,
+      hasCost: false,
+    });
+    router.push("/habit/basics");
+  };
+
+  const chooseCustom = () => {
+    set({
+      templateId: CUSTOM_GOOD_TEMPLATE_ID,
+      name: "",
+      trackingMethod: "amount",
+      targetAmount: null,
+      unit: null,
+      microtasks: [],
+      hasCost: false,
+    });
+    router.push("/habit/basics");
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="Build a good habit" subtitle="Choose a starting point, then make it yours." />
+      <ScrollView contentContainerStyle={styles.content}>
+        {GOOD_TEMPLATES.map((t) => (
+          <ListRow key={t.id} title={t.name} subtitle={t.description} onPress={() => chooseTemplate(t.id)} />
+        ))}
+        <PrimaryButton title="Create a custom good habit" variant="outline" onPress={chooseCustom} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+});

@@ -1,0 +1,5 @@
+create android application development setup using react native and expo. Check necessary tools and install necessary dependencies needed
+
+to change model use /model
+always use 
+--dangerously-skip-permissions
