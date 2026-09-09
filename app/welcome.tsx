@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandMark } from "../components/BrandMark";
+import { GoogleGIcon } from "../components/GoogleGIcon";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { SocialButton } from "../components/SocialButton";
 import { markOnboardingSeen } from "../lib/onboarding";
@@ -32,7 +33,7 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={styles.footer}>
-        <SocialButton title="Continue with Google" icon="logo-google" onPress={continueWithGoogle} />
+        <SocialButton title="Continue with Google" icon={<GoogleGIcon />} onPress={continueWithGoogle} />
         <PrimaryButton title="Continue as guest" variant="outline" onPress={continueAsGuest} />
       </View>
     </SafeAreaView>

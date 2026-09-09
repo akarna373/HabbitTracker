@@ -1,34 +1,51 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import type { ReactNode } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radii, spacing } from "../lib/theme";
 
 interface SocialButtonProps {
   title: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: ReactNode;
   onPress: () => void;
 }
+
+// Google brand colours, used for the gradient border stripe.
+const BORDER_COLORS = ["#4285F4", "#EA4335", "#FBBC05", "#34A853"] as const;
 
 // Visual only for now - no auth wired up yet.
 export function SocialButton({ title, icon, onPress }: SocialButtonProps) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-      <Ionicons name={icon} size={20} color={colors.textPrimary} style={styles.icon} />
-      <Text style={styles.text}>{title}</Text>
+    <Pressable onPress={onPress}>
+      {({ pressed }) => (
+        <LinearGradient
+          colors={BORDER_COLORS}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.borderWrap, pressed && styles.pressed]}
+        >
+          <View style={styles.button}>
+            <View style={styles.icon}>{icon}</View>
+            <Text style={styles.text}>{title}</Text>
+          </View>
+        </LinearGradient>
+      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  borderWrap: {
+    borderRadius: radii.button,
+    padding: 1.5,
+    marginBottom: spacing.sm,
+  },
   button: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radii.button,
+    borderRadius: radii.button - 1.5,
     paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surfaceRaised,
-    marginBottom: spacing.sm,
   },
   pressed: { opacity: 0.85 },
   icon: { marginRight: spacing.sm },
