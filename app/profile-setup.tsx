@@ -28,8 +28,19 @@ const GENDERS: { id: Gender; label: string }[] = [
 export default function ProfileSetupScreen() {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [age, setAge] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
+
+  const changeUsername = (text: string) => {
+    if (text.includes("@")) {
+      setUsername(text.replace(/@/g, ""));
+      setUsernameError("Username can't contain @");
+    } else {
+      setUsername(text);
+      setUsernameError(null);
+    }
+  };
 
   const usernameRef = useRef<TextInput>(null);
   const ageRef = useRef<TextInput>(null);
@@ -86,13 +97,14 @@ export default function ProfileSetupScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={username}
-                onChangeText={setUsername}
+                onChangeText={changeUsername}
                 returnKeyType="next"
                 blurOnSubmit={false}
                 onSubmitEditing={() => ageRef.current?.focus()}
               />
             </View>
           </Card>
+          {usernameError ? <Text style={styles.errorText}>{usernameError}</Text> : null}
 
           <Text style={styles.label}>AGE</Text>
           <Card>
@@ -140,6 +152,7 @@ const styles = StyleSheet.create({
   label: { ...typography.label, marginTop: spacing.sm, marginBottom: spacing.xs },
   input: { ...typography.body, paddingVertical: 4 },
   usernameRow: { flexDirection: "row", alignItems: "center" },
+  errorText: { ...typography.caption, color: colors.accentRed, marginTop: -spacing.xs, marginBottom: spacing.xs },
   atSign: { ...typography.body, color: colors.textMuted, marginRight: 2 },
   usernameInput: { flex: 1 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
