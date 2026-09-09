@@ -8,10 +8,10 @@ import { markOnboardingSeen } from "../lib/onboarding";
 import { colors, spacing, typography } from "../lib/theme";
 
 export default function WelcomeScreen() {
-  // TODO: wire up real Google auth later - both paths just enter the app for now.
+  // TODO: wire up real Google auth later - both paths just continue to profile setup for now.
   const continueToApp = async () => {
     await markOnboardingSeen();
-    router.replace("/(tabs)");
+    router.replace("/profile-setup");
   };
 
   return (
