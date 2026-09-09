@@ -3,11 +3,13 @@ import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandMark } from "../components/BrandMark";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { SocialButton } from "../components/SocialButton";
 import { markOnboardingSeen } from "../lib/onboarding";
 import { colors, spacing, typography } from "../lib/theme";
 
 export default function WelcomeScreen() {
-  const getStarted = async () => {
+  // TODO: wire up real Google auth later - both paths just enter the app for now.
+  const continueToApp = async () => {
     await markOnboardingSeen();
     router.replace("/(tabs)");
   };
@@ -28,7 +30,8 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={styles.footer}>
-        <PrimaryButton title="Get started" onPress={getStarted} />
+        <SocialButton title="Continue with Google" icon="logo-google" onPress={continueToApp} />
+        <PrimaryButton title="Continue as guest" variant="outline" onPress={continueToApp} />
       </View>
     </SafeAreaView>
   );
