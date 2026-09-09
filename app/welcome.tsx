@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandMark } from "../components/BrandMark";
 import { GoogleGIcon } from "../components/GoogleGIcon";
@@ -14,8 +14,11 @@ export default function WelcomeScreen() {
     router.replace("/profile-setup");
   };
 
-  // TODO: wire up real Google auth later - stub button, no action yet.
-  const continueWithGoogle = () => {};
+  // TODO: wire up real Google auth later - alert is a tap-registration test,
+  // not real behavior; swap for the real sign-in call when ready.
+  const continueWithGoogle = () => {
+    Alert.alert("Button tapped", "Google sign-in isn't wired up yet.");
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>

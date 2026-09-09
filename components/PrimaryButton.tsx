@@ -44,7 +44,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   primary: { backgroundColor: colors.accentPink },
-  outline: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.accentPink },
+  // A literal "transparent" background can make Android only hit-test the
+  // painted child (the text), not the full view bounds - use a near-invisible
+  // real color instead so the whole pill is tappable.
+  outline: { backgroundColor: "rgba(11,10,15,0.01)", borderWidth: 1, borderColor: colors.accentPink },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.85 },
   text: { color: colors.background, fontSize: 16, fontWeight: "700" },
