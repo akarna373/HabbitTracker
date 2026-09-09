@@ -1,6 +1,16 @@
 import { router } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useRef, useState } from "react";
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../components/Card";
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -21,6 +31,9 @@ export default function ProfileSetupScreen() {
   const [age, setAge] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
 
+  const usernameRef = useRef<TextInput>(null);
+  const ageRef = useRef<TextInput>(null);
+
   const cleanName = name.trim();
   const cleanUsername = normalizeUsername(username);
   const canContinue = cleanName.length > 0 && cleanUsername.length > 0;
@@ -38,72 +51,89 @@ export default function ProfileSetupScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Tell us a little about you</Text>
-        <Text style={styles.subtitle}>A few details to get your account started.</Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
+      >
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text style={styles.title}>Tell us a little about you</Text>
+          <Text style={styles.subtitle}>A few details to get your account started.</Text>
 
-        <Text style={styles.label}>NAME</Text>
-        <Card>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Alex"
-            placeholderTextColor={colors.textMuted}
-            value={name}
-            onChangeText={setName}
-          />
-        </Card>
-
-        <Text style={styles.label}>USERNAME</Text>
-        <Card>
-          <View style={styles.usernameRow}>
-            <Text style={styles.atSign}>@</Text>
+          <Text style={styles.label}>NAME</Text>
+          <Card>
             <TextInput
-              style={[styles.input, styles.usernameInput]}
-              placeholder="e.g. habitfan92"
+              style={styles.input}
+              placeholder="e.g. Alex"
               placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={username}
-              onChangeText={setUsername}
+              value={name}
+              onChangeText={setName}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => usernameRef.current?.focus()}
             />
+          </Card>
+
+          <Text style={styles.label}>USERNAME</Text>
+          <Card>
+            <View style={styles.usernameRow}>
+              <Text style={styles.atSign}>@</Text>
+              <TextInput
+                ref={usernameRef}
+                style={[styles.input, styles.usernameInput]}
+                placeholder="e.g. habitfan92"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={username}
+                onChangeText={setUsername}
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => ageRef.current?.focus()}
+              />
+            </View>
+          </Card>
+
+          <Text style={styles.label}>AGE</Text>
+          <Card>
+            <TextInput
+              ref={ageRef}
+              style={styles.input}
+              keyboardType="numeric"
+              placeholder="e.g. 28"
+              placeholderTextColor={colors.textMuted}
+              value={age}
+              onChangeText={setAge}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+          </Card>
+
+          <Text style={styles.label}>GENDER</Text>
+          <View style={styles.chipRow}>
+            {GENDERS.map((g) => (
+              <Pressable
+                key={g.id}
+                onPress={() => setGender(gender === g.id ? null : g.id)}
+                style={[styles.chip, gender === g.id && styles.chipActive]}
+              >
+                <Text style={[styles.chipText, gender === g.id && styles.chipTextActive]}>{g.label}</Text>
+              </Pressable>
+            ))}
           </View>
-        </Card>
+        </ScrollView>
 
-        <Text style={styles.label}>AGE</Text>
-        <Card>
-          <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            placeholder="e.g. 28"
-            placeholderTextColor={colors.textMuted}
-            value={age}
-            onChangeText={setAge}
-          />
-        </Card>
-
-        <Text style={styles.label}>GENDER</Text>
-        <View style={styles.chipRow}>
-          {GENDERS.map((g) => (
-            <Pressable
-              key={g.id}
-              onPress={() => setGender(gender === g.id ? null : g.id)}
-              style={[styles.chip, gender === g.id && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, gender === g.id && styles.chipTextActive]}>{g.label}</Text>
-            </Pressable>
-          ))}
+        <View style={styles.footer}>
+          <PrimaryButton title="Continue" disabled={!canContinue} onPress={finish} />
         </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <PrimaryButton title="Continue" disabled={!canContinue} onPress={finish} />
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.lg },
   title: { ...typography.title, marginBottom: spacing.xs },
   subtitle: { ...typography.caption, marginBottom: spacing.lg },
