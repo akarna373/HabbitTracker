@@ -4,7 +4,8 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../components/Card";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { generateGuestName, saveProfile, type Gender } from "../lib/profile";
+import { markOnboardingSeen } from "../lib/onboarding";
+import { generateGuestName, normalizeUsername, saveProfile, type Gender } from "../lib/profile";
 import { colors, spacing, typography } from "../lib/theme";
 
 const GENDERS: { id: Gender; label: string }[] = [
@@ -15,16 +16,20 @@ const GENDERS: { id: Gender; label: string }[] = [
 ];
 
 export default function ProfileSetupScreen() {
-  const [name, setName] = useState("");
+  const [username, setUsername] = useState(generateGuestName());
   const [age, setAge] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
 
-  const finish = async (skip: boolean) => {
+  const cleanUsername = normalizeUsername(username);
+  const canContinue = cleanUsername.length > 0;
+
+  const finish = async () => {
     await saveProfile({
-      name: skip ? generateGuestName() : name.trim() || generateGuestName(),
-      age: skip || !age ? null : Number(age),
-      gender: skip ? null : gender,
+      username: cleanUsername,
+      age: age ? Number(age) : null,
+      gender,
     });
+    await markOnboardingSeen();
     router.replace("/(tabs)");
   };
 
@@ -32,20 +37,25 @@ export default function ProfileSetupScreen() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Tell us a little about you</Text>
-        <Text style={styles.subtitle}>Helps personalize your experience. You can skip this.</Text>
+        <Text style={styles.subtitle}>Choose a username to get started. Age and gender are optional.</Text>
 
-        <Text style={styles.label}>NAME</Text>
+        <Text style={styles.label}>USERNAME</Text>
         <Card>
-          <TextInput
-            style={styles.input}
-            placeholder="Your name"
-            placeholderTextColor={colors.textMuted}
-            value={name}
-            onChangeText={setName}
-          />
+          <View style={styles.usernameRow}>
+            <Text style={styles.atSign}>@</Text>
+            <TextInput
+              style={[styles.input, styles.usernameInput]}
+              placeholder="username"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={username}
+              onChangeText={setUsername}
+            />
+          </View>
         </Card>
 
-        <Text style={styles.label}>AGE</Text>
+        <Text style={styles.label}>AGE (OPTIONAL)</Text>
         <Card>
           <TextInput
             style={styles.input}
@@ -57,12 +67,12 @@ export default function ProfileSetupScreen() {
           />
         </Card>
 
-        <Text style={styles.label}>GENDER</Text>
+        <Text style={styles.label}>GENDER (OPTIONAL)</Text>
         <View style={styles.chipRow}>
           {GENDERS.map((g) => (
             <Pressable
               key={g.id}
-              onPress={() => setGender(g.id)}
+              onPress={() => setGender(gender === g.id ? null : g.id)}
               style={[styles.chip, gender === g.id && styles.chipActive]}
             >
               <Text style={[styles.chipText, gender === g.id && styles.chipTextActive]}>{g.label}</Text>
@@ -72,8 +82,7 @@ export default function ProfileSetupScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <PrimaryButton title="Continue" onPress={() => finish(false)} />
-        <PrimaryButton title="Skip for now" variant="outline" onPress={() => finish(true)} />
+        <PrimaryButton title="Continue" disabled={!canContinue} onPress={finish} />
       </View>
     </SafeAreaView>
   );
@@ -86,6 +95,9 @@ const styles = StyleSheet.create({
   subtitle: { ...typography.caption, marginBottom: spacing.lg },
   label: { ...typography.label, marginTop: spacing.sm, marginBottom: spacing.xs },
   input: { ...typography.body, paddingVertical: 4 },
+  usernameRow: { flexDirection: "row", alignItems: "center" },
+  atSign: { ...typography.body, color: colors.textMuted, marginRight: 2 },
+  usernameInput: { flex: 1 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: {
     paddingVertical: spacing.xs,

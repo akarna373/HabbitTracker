@@ -5,12 +5,12 @@ import { BrandMark } from "../components/BrandMark";
 import { GoogleGIcon } from "../components/GoogleGIcon";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { SocialButton } from "../components/SocialButton";
-import { markOnboardingSeen } from "../lib/onboarding";
 import { colors, spacing, typography } from "../lib/theme";
 
 export default function WelcomeScreen() {
-  const continueAsGuest = async () => {
-    await markOnboardingSeen();
+  // Onboarding is only marked "seen" once profile-setup finishes, so killing
+  // the app mid-flow re-shows Welcome instead of stranding a user with no profile.
+  const continueAsGuest = () => {
     router.replace("/profile-setup");
   };
 

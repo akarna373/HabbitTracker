@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
+import { ProfileBadge } from "../../components/ProfileBadge";
 import { ProgressBar } from "../../components/ProgressBar";
 import { formatLongDate, todayISO } from "../../lib/dates";
 import { formatTime12h, isHabitCompleteOn } from "../../lib/progress";
@@ -24,8 +25,13 @@ export default function TodayScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View>
-            <Text style={styles.title}>A little better, daily.</Text>
-            <Text style={styles.date}>{formatLongDate(today)}</Text>
+            <View style={styles.headerRow}>
+              <View style={styles.headerTextCol}>
+                <Text style={styles.title}>A little better, daily.</Text>
+                <Text style={styles.date}>{formatLongDate(today)}</Text>
+              </View>
+              <ProfileBadge />
+            </View>
 
             <Card highlighted>
               <View style={styles.summaryRow}>
@@ -89,7 +95,14 @@ function HabitCard({ habit }: { habit: Habit }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   listContent: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
-  title: { ...typography.title, marginTop: spacing.md },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginTop: spacing.md,
+  },
+  headerTextCol: { flexShrink: 1, paddingRight: spacing.sm },
+  title: { ...typography.title },
   date: { ...typography.caption, marginBottom: spacing.md },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   summaryTitle: { ...typography.body, fontWeight: "700" },
