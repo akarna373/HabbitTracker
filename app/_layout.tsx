@@ -42,6 +42,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="welcome" />
           <Stack.Screen name="profile-setup" />
+          <Stack.Screen name="focus-setup" />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -46,7 +46,7 @@ export default function ProfileSetupScreen() {
       gender,
     });
     await markOnboardingSeen();
-    router.replace("/(tabs)");
+    router.replace("/focus-setup");
   };
 
   return (
