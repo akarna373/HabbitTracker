@@ -16,6 +16,7 @@ export function PrimaryButton({ title, onPress, variant = "primary", disabled, l
       onPress={onPress}
       disabled={disabled || loading}
       hitSlop={8}
+      android_ripple={{ color: isOutline ? "rgba(255,79,139,0.25)" : "rgba(0,0,0,0.15)" }}
       style={({ pressed }) => [
         styles.button,
         isOutline ? styles.outline : styles.primary,
@@ -40,6 +41,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing.sm,
+    overflow: "hidden",
   },
   primary: { backgroundColor: colors.accentPink },
   outline: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.accentPink },
