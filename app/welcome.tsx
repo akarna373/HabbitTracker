@@ -8,11 +8,13 @@ import { markOnboardingSeen } from "../lib/onboarding";
 import { colors, spacing, typography } from "../lib/theme";
 
 export default function WelcomeScreen() {
-  // TODO: wire up real Google auth later - both paths just continue to profile setup for now.
-  const continueToApp = async () => {
+  const continueAsGuest = async () => {
     await markOnboardingSeen();
     router.replace("/profile-setup");
   };
+
+  // TODO: wire up real Google auth later - stub button, no action yet.
+  const continueWithGoogle = () => {};
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -30,8 +32,8 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={styles.footer}>
-        <SocialButton title="Continue with Google" icon="logo-google" onPress={continueToApp} />
-        <PrimaryButton title="Continue as guest" variant="outline" onPress={continueToApp} />
+        <SocialButton title="Continue with Google" icon="logo-google" onPress={continueWithGoogle} />
+        <PrimaryButton title="Continue as guest" variant="outline" onPress={continueAsGuest} />
       </View>
     </SafeAreaView>
   );
