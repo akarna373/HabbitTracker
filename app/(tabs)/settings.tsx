@@ -1,6 +1,8 @@
+import { router } from "expo-router";
 import { Alert, ScrollView, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ListRow } from "../../components/ListRow";
+import { resetOnboarding } from "../../lib/onboarding";
 import { useStore } from "../../lib/store";
 import { colors, spacing, typography } from "../../lib/theme";
 
@@ -43,6 +45,14 @@ export default function SettingsScreen() {
         <ListRow title="Partner sharing" subtitle="Off - coming in a future release" disabled showChevron={false} />
         <ListRow title="Health Connect" subtitle="Not connected - coming in a future release" disabled showChevron={false} />
         <ListRow title="Privacy and data" subtitle="Delete all habits and history from this device" onPress={confirmClearAll} />
+        <ListRow
+          title="Replay welcome screen"
+          subtitle="See the first-launch greeting again"
+          onPress={async () => {
+            await resetOnboarding();
+            router.replace("/welcome");
+          }}
+        />
       </ScrollView>
     </SafeAreaView>
   );

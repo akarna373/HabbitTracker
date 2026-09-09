@@ -101,7 +101,7 @@ export default function HabitDetailScreen() {
             title={amount === 0 ? "I stayed smoke-free today" : `You logged ${amount} ${habit.unit ?? ""} today`}
             variant="outline"
             disabled={amount !== 0}
-            onPress={() => {}}
+            onPress={() => incrementAmount(habit.id, today, 0)}
           />
 
           <PrimaryButton title="View tonight's summary" variant="outline" onPress={() => router.push(`/habit/${habit.id}/summary`)} />
