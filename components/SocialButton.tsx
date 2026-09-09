@@ -15,7 +15,7 @@ const BORDER_COLORS = ["#4285F4", "#EA4335", "#FBBC05", "#34A853"] as const;
 // Visual only for now - no auth wired up yet.
 export function SocialButton({ title, icon, onPress }: SocialButtonProps) {
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={onPress} hitSlop={8} style={styles.pressable}>
       {({ pressed }) => (
         <LinearGradient
           colors={BORDER_COLORS}
@@ -34,12 +34,17 @@ export function SocialButton({ title, icon, onPress }: SocialButtonProps) {
 }
 
 const styles = StyleSheet.create({
+  pressable: {
+    width: "100%",
+  },
   borderWrap: {
+    width: "100%",
     borderRadius: radii.button,
     padding: 1.5,
     marginBottom: spacing.sm,
   },
   button: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

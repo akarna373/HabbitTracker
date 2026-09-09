@@ -15,6 +15,7 @@ export function PrimaryButton({ title, onPress, variant = "primary", disabled, l
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
+      hitSlop={8}
       style={({ pressed }) => [
         styles.button,
         isOutline ? styles.outline : styles.primary,
@@ -33,6 +34,7 @@ export function PrimaryButton({ title, onPress, variant = "primary", disabled, l
 
 const styles = StyleSheet.create({
   button: {
+    width: "100%",
     borderRadius: radii.button,
     paddingVertical: spacing.md,
     alignItems: "center",
