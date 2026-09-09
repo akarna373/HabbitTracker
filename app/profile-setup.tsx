@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../components/Card";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { markOnboardingSeen } from "../lib/onboarding";
-import { generateGuestName, normalizeUsername, saveProfile, type Gender } from "../lib/profile";
+import { normalizeUsername, saveProfile, type Gender } from "../lib/profile";
 import { colors, spacing, typography } from "../lib/theme";
 
 const GENDERS: { id: Gender; label: string }[] = [
@@ -16,15 +16,18 @@ const GENDERS: { id: Gender; label: string }[] = [
 ];
 
 export default function ProfileSetupScreen() {
-  const [username, setUsername] = useState(generateGuestName());
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
 
+  const cleanName = name.trim();
   const cleanUsername = normalizeUsername(username);
-  const canContinue = cleanUsername.length > 0;
+  const canContinue = cleanName.length > 0 && cleanUsername.length > 0;
 
   const finish = async () => {
     await saveProfile({
+      name: cleanName,
       username: cleanUsername,
       age: age ? Number(age) : null,
       gender,
@@ -37,7 +40,18 @@ export default function ProfileSetupScreen() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Tell us a little about you</Text>
-        <Text style={styles.subtitle}>Choose a username to get started. Age and gender are optional.</Text>
+        <Text style={styles.subtitle}>A few details to get your account started.</Text>
+
+        <Text style={styles.label}>NAME</Text>
+        <Card>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Alex"
+            placeholderTextColor={colors.textMuted}
+            value={name}
+            onChangeText={setName}
+          />
+        </Card>
 
         <Text style={styles.label}>USERNAME</Text>
         <Card>
@@ -45,7 +59,7 @@ export default function ProfileSetupScreen() {
             <Text style={styles.atSign}>@</Text>
             <TextInput
               style={[styles.input, styles.usernameInput]}
-              placeholder="username"
+              placeholder="e.g. habitfan92"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
@@ -55,7 +69,7 @@ export default function ProfileSetupScreen() {
           </View>
         </Card>
 
-        <Text style={styles.label}>AGE (OPTIONAL)</Text>
+        <Text style={styles.label}>AGE</Text>
         <Card>
           <TextInput
             style={styles.input}
@@ -67,7 +81,7 @@ export default function ProfileSetupScreen() {
           />
         </Card>
 
-        <Text style={styles.label}>GENDER (OPTIONAL)</Text>
+        <Text style={styles.label}>GENDER</Text>
         <View style={styles.chipRow}>
           {GENDERS.map((g) => (
             <Pressable
