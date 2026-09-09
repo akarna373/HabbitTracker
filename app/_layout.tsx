@@ -4,7 +4,6 @@ import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { BrandMark } from "../components/BrandMark";
 import { colors } from "../lib/theme";
 import { useStore } from "../lib/store";
 import { hasSeenOnboarding } from "../lib/onboarding";
@@ -27,12 +26,7 @@ export default function RootLayout() {
   }, [ready, seenOnboarding]);
 
   if (!ready || seenOnboarding === null) {
-    return (
-      <View style={styles.loading}>
-        <BrandMark size={64} />
-        {error ? null : null}
-      </View>
-    );
+    return <View style={styles.loading} />;
   }
 
   return (
