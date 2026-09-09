@@ -15,12 +15,7 @@ const BORDER_COLORS = ["#4285F4", "#EA4335", "#FBBC05", "#34A853"] as const;
 // Visual only for now - no auth wired up yet.
 export function SocialButton({ title, icon, onPress }: SocialButtonProps) {
   return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={8}
-      android_ripple={{ color: "rgba(255,255,255,0.12)" }}
-      style={styles.pressable}
-    >
+    <Pressable onPress={onPress} hitSlop={8} style={styles.pressable}>
       {({ pressed }) => (
         <LinearGradient
           colors={BORDER_COLORS}
