@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import { colors, radii, spacing } from "../lib/theme";
 
@@ -11,11 +12,28 @@ interface PrimaryButtonProps {
 
 export function PrimaryButton({ title, onPress, variant = "primary", disabled, loading }: PrimaryButtonProps) {
   const isOutline = variant === "outline";
+  const isHandling = useRef(false);
+
+  const handlePress = async () => {
+    if (isHandling.current) return;
+    isHandling.current = true;
+    try {
+      await onPress();
+    } finally {
+      isHandling.current = false;
+    }
+  };
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       disabled={disabled || loading}
-      hitSlop={8}
+      hitSlop={12}
+      // Android can "flatten" a Pressable with no independent visual props
+      // into its parent's view tree, which can shrink its real touch region
+      // down to whatever child (like the Text) still renders its own bounds.
+      // Force it to stay a real, independent native view.
+      collapsable={false}
       android_ripple={{ color: isOutline ? "rgba(255,79,139,0.25)" : "rgba(0,0,0,0.15)" }}
       style={({ pressed }) => [
         styles.button,
