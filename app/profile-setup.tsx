@@ -138,11 +138,11 @@ export default function ProfileSetupScreen() {
             ))}
           </View>
         </ScrollView>
-
-        <View style={styles.footer}>
-          <PrimaryButton title="Continue" disabled={!canContinue} onPress={finish} />
-        </View>
       </KeyboardAvoidingView>
+
+      <View style={styles.footer}>
+        <PrimaryButton title="Continue" disabled={!canContinue} onPress={finish} />
+      </View>
     </SafeAreaView>
   );
 }
