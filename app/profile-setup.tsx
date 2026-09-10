@@ -118,8 +118,9 @@ export default function ProfileSetupScreen() {
               keyboardType="numeric"
               placeholder="e.g. 28"
               placeholderTextColor={colors.textMuted}
+              maxLength={2}
               value={age}
-              onChangeText={(text) => setAge(text.replace(/[^0-9]/g, ""))}
+              onChangeText={(text) => setAge(text.replace(/[^0-9]/g, "").slice(0, 2))}
               returnKeyType="done"
               onSubmitEditing={() => Keyboard.dismiss()}
             />
