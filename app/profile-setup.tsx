@@ -19,10 +19,12 @@ import { markOnboardingSeen } from "../lib/onboarding";
 import { normalizeUsername, saveProfile, type Gender } from "../lib/profile";
 import { colors, spacing, typography } from "../lib/theme";
 
-const GENDERS: { id: Gender; label: string; icon?: keyof typeof Ionicons.glyphMap }[] = [
-  { id: "female", label: "Female", icon: "female" },
-  { id: "male", label: "Male", icon: "male" },
-  { id: "unspecified", label: "Prefer not to say" },
+const VIBRANT_BLUE = "#2E90FA";
+
+const GENDERS: { id: Gender; label: string; icon?: keyof typeof Ionicons.glyphMap; activeColor: string }[] = [
+  { id: "female", label: "Female", icon: "female", activeColor: colors.accentPink },
+  { id: "male", label: "Male", icon: "male", activeColor: VIBRANT_BLUE },
+  { id: "unspecified", label: "Prefer not to say", activeColor: colors.accentPink },
 ];
 
 export default function ProfileSetupScreen() {
@@ -129,23 +131,29 @@ export default function ProfileSetupScreen() {
 
           <Text style={styles.label}>GENDER</Text>
           <View style={styles.chipRow}>
-            {GENDERS.map((g) => (
+            {GENDERS.map((g) => {
+              const isActive = gender === g.id;
+              return (
               <Pressable
                 key={g.id}
                 onPress={() => setGender(gender === g.id ? null : g.id)}
-                style={[styles.chip, gender === g.id && styles.chipActive]}
+                style={[
+                  styles.chip,
+                  isActive && { borderColor: g.activeColor, backgroundColor: colors.surface },
+                ]}
               >
                 {g.icon ? (
                   <Ionicons
                     name={g.icon}
                     size={15}
-                    color={gender === g.id ? colors.accentPink : colors.textSecondary}
+                    color={isActive ? g.activeColor : colors.textSecondary}
                     style={styles.chipIcon}
                   />
                 ) : null}
-                <Text style={[styles.chipText, gender === g.id && styles.chipTextActive]}>{g.label}</Text>
+                <Text style={[styles.chipText, isActive && { color: g.activeColor }]}>{g.label}</Text>
               </Pressable>
-            ))}
+              );
+            })}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -184,8 +192,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(11,10,15,0.01)",
   },
   chipIcon: { marginRight: spacing.xs },
-  chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
   chipText: { ...typography.caption },
-  chipTextActive: { color: colors.accentPink },
   footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
 });
