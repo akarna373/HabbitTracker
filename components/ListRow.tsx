@@ -10,12 +10,14 @@ interface ListRowProps {
   showChevron?: boolean;
   highlighted?: boolean;
   right?: React.ReactNode;
+  icon?: React.ReactNode;
 }
 
-export function ListRow({ title, subtitle, onPress, disabled, showChevron = true, highlighted, right }: ListRowProps) {
+export function ListRow({ title, subtitle, onPress, disabled, showChevron = true, highlighted, right, icon }: ListRowProps) {
   return (
     <Card onPress={onPress} disabled={disabled} highlighted={highlighted}>
       <View style={styles.row}>
+        {icon ? <View style={[styles.iconWrap, disabled && styles.iconWrapDisabled]}>{icon}</View> : null}
         <View style={styles.textCol}>
           <Text style={[styles.title, disabled && styles.disabledText]}>{title}</Text>
           {subtitle ? <Text style={[styles.subtitle, disabled && styles.disabledText]}>{subtitle}</Text> : null}
@@ -28,7 +30,19 @@ export function ListRow({ title, subtitle, onPress, disabled, showChevron = true
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  textCol: { flexShrink: 1, paddingRight: spacing.sm },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.sm,
+  },
+  iconWrapDisabled: { opacity: 0.5 },
+  textCol: { flex: 1, paddingRight: spacing.sm },
   title: { ...typography.body, fontWeight: "600" },
   subtitle: { ...typography.caption, marginTop: 2 },
   disabledText: { color: colors.textMuted },

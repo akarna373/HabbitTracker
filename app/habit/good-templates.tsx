@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ListRow } from "../../components/ListRow";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenHeader } from "../../components/ScreenHeader";
+import { TemplateIcon } from "../../components/TemplateIcon";
 import { useDraftStore } from "../../lib/draftStore";
 import { CUSTOM_GOOD_TEMPLATE_ID, GOOD_TEMPLATES } from "../../lib/templates";
 import { colors, spacing } from "../../lib/theme";
@@ -44,7 +45,13 @@ export default function GoodTemplatesScreen() {
       <ScreenHeader title="Build a good habit" subtitle="Choose a starting point, then make it yours." />
       <ScrollView contentContainerStyle={styles.content}>
         {GOOD_TEMPLATES.map((t) => (
-          <ListRow key={t.id} title={t.name} subtitle={t.description} onPress={() => chooseTemplate(t.id)} />
+          <ListRow
+            key={t.id}
+            title={t.name}
+            subtitle={t.description}
+            icon={<TemplateIcon set={t.iconSet} name={t.icon} />}
+            onPress={() => chooseTemplate(t.id)}
+          />
         ))}
         <PrimaryButton title="Create a custom good habit" variant="outline" onPress={chooseCustom} />
       </ScrollView>

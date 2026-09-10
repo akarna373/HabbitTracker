@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ListRow } from "../../components/ListRow";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenHeader } from "../../components/ScreenHeader";
+import { TemplateIcon } from "../../components/TemplateIcon";
 import { useDraftStore } from "../../lib/draftStore";
 import { CUSTOM_QUIT_TEMPLATE_ID, QUIT_TEMPLATES } from "../../lib/templates";
 import { colors, spacing } from "../../lib/theme";
@@ -50,7 +51,13 @@ export default function QuitTemplatesScreen() {
       <ScreenHeader title="Quit a bad habit" subtitle="Choose a starting point without judgment." />
       <ScrollView contentContainerStyle={styles.content}>
         {QUIT_TEMPLATES.map((t) => (
-          <ListRow key={t.id} title={t.name} subtitle={t.description} onPress={() => chooseTemplate(t.id)} />
+          <ListRow
+            key={t.id}
+            title={t.name}
+            subtitle={t.description}
+            icon={<TemplateIcon set={t.iconSet} name={t.icon} />}
+            onPress={() => chooseTemplate(t.id)}
+          />
         ))}
         <PrimaryButton title="Create a custom quit habit" variant="outline" onPress={chooseCustom} />
       </ScrollView>
