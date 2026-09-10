@@ -33,11 +33,12 @@ export default function ProfileSetupScreen() {
   const [gender, setGender] = useState<Gender | null>(null);
 
   const changeUsername = (text: string) => {
-    if (text.includes("@")) {
-      setUsername(text.replace(/@/g, ""));
+    const lower = text.toLowerCase();
+    if (lower.includes("@")) {
+      setUsername(lower.replace(/@/g, ""));
       setUsernameError("Username can't contain @");
     } else {
-      setUsername(text);
+      setUsername(lower);
       setUsernameError(null);
     }
   };
