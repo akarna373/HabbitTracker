@@ -3,12 +3,11 @@ import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ColorFadeIcon } from "../components/ColorFadeIcon";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { saveFocusAreas } from "../lib/focus";
 import { colors, spacing, typography } from "../lib/theme";
 
-const GOOD_ICON_COLORS = [colors.accentPink, colors.accentRed, colors.softAccent];
+const FACEBOOK_BLUE = "#1877F2";
 
 // Drives both the one-shot wiggle and the grey -> coral-red reveal of the
 // "bad habits" icon, timed to play together.
@@ -48,7 +47,7 @@ function useBadHabitEntrance() {
 }
 
 const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: "good", label: "Good habits", icon: "thumbs-up-outline" },
+  { id: "good", label: "Good habits", icon: "thumbs-up" },
   { id: "bad", label: "Track bad habits", icon: "thumbs-down" },
   { id: "study", label: "Study", icon: "school-outline" },
   { id: "personal_goal", label: "Personal goals", icon: "flag-outline" },
@@ -89,11 +88,11 @@ export default function FocusSetupScreen() {
                 style={[styles.chip, active && styles.chipActive]}
               >
                 {area.id === "good" ? (
-                  <View style={styles.chipIcon}>
-                    <ColorFadeIcon name={area.icon} colors={GOOD_ICON_COLORS} size={16} />
+                  <View style={[styles.chipIcon, styles.iconBadge, styles.goodIconBadge]}>
+                    <Ionicons name={area.icon} size={14} color={FACEBOOK_BLUE} />
                   </View>
                 ) : area.id === "bad" ? (
-                  <Animated.View style={[styles.chipIcon, styles.badIconBadge, { backgroundColor: badgeBg }]}>
+                  <Animated.View style={[styles.chipIcon, styles.iconBadge, { backgroundColor: badgeBg }]}>
                     <Ionicons name={area.icon} size={14} color={colors.accentRed} style={styles.badIconOverlay} />
                     <Animated.View style={{ opacity: grayIconOpacity }}>
                       <Ionicons name={area.icon} size={14} color={colors.textMuted} />
@@ -146,14 +145,14 @@ const styles = StyleSheet.create({
   },
   chipIcon: { marginRight: spacing.xs },
   badIconOverlay: { position: "absolute" },
-  badIconBadge: {
+  iconBadge: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: "rgba(255,90,98,0.16)",
     alignItems: "center",
     justifyContent: "center",
   },
+  goodIconBadge: { backgroundColor: "rgba(24,119,242,0.16)" },
   chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
   chipText: { ...typography.body },
   chipTextActive: { color: colors.accentPink },
