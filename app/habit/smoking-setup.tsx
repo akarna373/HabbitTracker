@@ -32,7 +32,10 @@ export default function SmokingSetupScreen() {
             placeholder="e.g. 5"
             placeholderTextColor={colors.textMuted}
             value={draft.baselineQuantity !== null ? String(draft.baselineQuantity) : ""}
-            onChangeText={(t) => draft.set({ baselineQuantity: t ? Number(t) : null })}
+            onChangeText={(t) => {
+              const digits = t.replace(/[^0-9]/g, "");
+              draft.set({ baselineQuantity: digits ? Number(digits) : null });
+            }}
           />
         </Card>
 
@@ -44,7 +47,10 @@ export default function SmokingSetupScreen() {
             placeholder="e.g. 20"
             placeholderTextColor={colors.textMuted}
             value={draft.pricePerItem !== null ? String(draft.pricePerItem) : ""}
-            onChangeText={(t) => draft.set({ pricePerItem: t ? Number(t) : null })}
+            onChangeText={(t) => {
+              const cleaned = t.replace(/[^0-9.]/g, "");
+              draft.set({ pricePerItem: cleaned ? Number(cleaned) : null });
+            }}
           />
         </Card>
 

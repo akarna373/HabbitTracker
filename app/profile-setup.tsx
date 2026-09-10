@@ -119,7 +119,7 @@ export default function ProfileSetupScreen() {
               placeholder="e.g. 28"
               placeholderTextColor={colors.textMuted}
               value={age}
-              onChangeText={setAge}
+              onChangeText={(text) => setAge(text.replace(/[^0-9]/g, ""))}
               returnKeyType="done"
               onSubmitEditing={() => Keyboard.dismiss()}
             />

@@ -58,7 +58,10 @@ export default function BasicsScreen() {
                   placeholder="10"
                   placeholderTextColor={colors.textMuted}
                   value={draft.targetAmount !== null ? String(draft.targetAmount) : ""}
-                  onChangeText={(t) => draft.set({ targetAmount: t ? Number(t) : null })}
+                  onChangeText={(t) => {
+                    const digits = t.replace(/[^0-9]/g, "");
+                    draft.set({ targetAmount: digits ? Number(digits) : null });
+                  }}
                 />
                 <TextInput
                   style={[styles.input, { flex: 1, textAlign: "right" }]}
