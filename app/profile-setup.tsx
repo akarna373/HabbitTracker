@@ -167,6 +167,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
+    // A literal transparent background can make Android only hit-test the
+    // painted child (the text), not the full chip - keep a near-invisible
+    // real background so the whole chip is tappable.
+    backgroundColor: "rgba(11,10,15,0.01)",
   },
   chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
   chipText: { ...typography.caption },
