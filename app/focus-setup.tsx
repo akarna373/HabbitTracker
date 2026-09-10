@@ -74,6 +74,10 @@ export default function FocusSetupScreen() {
                   <View style={styles.chipIcon}>
                     <ColorFadeIcon name={area.icon} colors={GOOD_ICON_COLORS} size={16} />
                   </View>
+                ) : area.id === "bad" ? (
+                  <View style={[styles.chipIcon, styles.badIconBadge]}>
+                    <Ionicons name={area.icon} size={14} color={colors.accentRed} />
+                  </View>
                 ) : (
                   <Ionicons
                     name={area.icon}
@@ -120,6 +124,14 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   chipIcon: { marginRight: spacing.xs },
+  badIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(255,90,98,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
   chipText: { ...typography.body },
   chipTextActive: { color: colors.accentPink },
