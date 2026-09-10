@@ -34,7 +34,6 @@ export function PrimaryButton({ title, onPress, variant = "primary", disabled, l
       // down to whatever child (like the Text) still renders its own bounds.
       // Force it to stay a real, independent native view.
       collapsable={false}
-      android_ripple={{ color: isOutline ? "rgba(255,79,139,0.25)" : "rgba(0,0,0,0.15)" }}
       style={({ pressed }) => [
         styles.button,
         isOutline ? styles.outline : styles.primary,
