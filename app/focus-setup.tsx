@@ -9,31 +9,30 @@ import { colors, spacing, typography } from "../lib/theme";
 
 const FACEBOOK_BLUE = "#1877F2";
 
-// Orchestrates one entrance sequence across all five chips, each animating
-// only after the previous one finishes: bad (2s initial delay) -> good ->
-// study -> personal goals -> achiever, with each gap shorter than the last.
+// All five chips render fully visible immediately. After a 2s pause, "bad
+// habits" wiggles and its icon reveals from grey to red. Then, at a reading
+// pace (even gaps, not rushed), a brief attention pulse scans across the
+// remaining chips left to right: good -> study -> personal goals -> achiever
+// - as if the user's eyes were moving from one to the next.
+const READING_PACE_MS = 550;
+
 function useIconEntrance() {
   const badShake = useRef(new Animated.Value(0)).current;
   const badColor = useRef(new Animated.Value(0)).current;
-  const goodPop = useRef(new Animated.Value(0)).current;
-  const studyPop = useRef(new Animated.Value(0)).current;
-  const goalPop = useRef(new Animated.Value(0)).current;
-  const achieverPop = useRef(new Animated.Value(0)).current;
+  const goodPulse = useRef(new Animated.Value(0)).current;
+  const studyPulse = useRef(new Animated.Value(0)).current;
+  const goalPulse = useRef(new Animated.Value(0)).current;
+  const achieverPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let cancelled = false;
     AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
-      if (cancelled) return;
-      if (reduced) {
-        badColor.setValue(1);
-        goodPop.setValue(1);
-        studyPop.setValue(1);
-        goalPop.setValue(1);
-        achieverPop.setValue(1);
-        return;
-      }
-      const pop = (value: Animated.Value) =>
-        Animated.timing(value, { toValue: 1, duration: 280, easing: Easing.out(Easing.back(1.4)), useNativeDriver: true });
+      if (cancelled || reduced) return;
+      const pulse = (value: Animated.Value) =>
+        Animated.sequence([
+          Animated.timing(value, { toValue: 1, duration: 180, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+          Animated.timing(value, { toValue: 0, duration: 180, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+        ]);
 
       Animated.sequence([
         Animated.delay(2000),
@@ -46,23 +45,23 @@ function useIconEntrance() {
           ]),
           Animated.timing(badColor, { toValue: 1, duration: 480, easing: Easing.out(Easing.ease), useNativeDriver: false }),
         ]),
-        Animated.delay(300),
-        pop(goodPop),
-        Animated.delay(200),
-        pop(studyPop),
-        Animated.delay(150),
-        pop(goalPop),
-        Animated.delay(100),
-        pop(achieverPop),
+        Animated.delay(READING_PACE_MS),
+        pulse(goodPulse),
+        Animated.delay(READING_PACE_MS),
+        pulse(studyPulse),
+        Animated.delay(READING_PACE_MS),
+        pulse(goalPulse),
+        Animated.delay(READING_PACE_MS),
+        pulse(achieverPulse),
       ]).start();
     });
     return () => {
       cancelled = true;
     };
-  }, [badShake, badColor, goodPop, studyPop, goalPop, achieverPop]);
+  }, [badShake, badColor, goodPulse, studyPulse, goalPulse, achieverPulse]);
 
   const badRotate = badShake.interpolate({ inputRange: [-1, 1], outputRange: ["-4deg", "4deg"] });
-  return { badRotate, badColor, goodPop, studyPop, goalPop, achieverPop };
+  return { badRotate, badColor, goodPulse, studyPulse, goalPulse, achieverPulse };
 }
 
 const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -75,21 +74,22 @@ const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyp
 
 export default function FocusSetupScreen() {
   const [selected, setSelected] = useState<string[]>([]);
-  const { badRotate, badColor, goodPop, studyPop, goalPop, achieverPop } = useIconEntrance();
+  const { badRotate, badColor, goodPulse, studyPulse, goalPulse, achieverPulse } = useIconEntrance();
   const badgeBg = badColor.interpolate({
     inputRange: [0, 1],
     outputRange: ["rgba(150,150,160,0.18)", "rgba(255,90,98,0.16)"],
   });
   const grayIconOpacity = badColor.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-  const popByArea: Record<string, Animated.Value> = {
-    good: goodPop,
-    study: studyPop,
-    personal_goal: goalPop,
-    achiever: achieverPop,
+  const pulseByArea: Record<string, Animated.Value> = {
+    good: goodPulse,
+    study: studyPulse,
+    personal_goal: goalPulse,
+    achiever: achieverPulse,
   };
-  const popStyle = (pop: Animated.Value) => ({
-    opacity: pop,
-    transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
+  // Always fully visible - the pulse briefly enlarges an icon as the "glance"
+  // passes over it, then settles back to its normal size.
+  const pulseStyle = (pulse: Animated.Value) => ({
+    transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) }],
   });
 
   const toggle = (id: string) => {
@@ -117,7 +117,7 @@ export default function FocusSetupScreen() {
                 style={[styles.chip, active && styles.chipActive]}
               >
                 {area.id === "good" ? (
-                  <Animated.View style={[styles.chipIcon, styles.iconBadge, styles.goodIconBadge, popStyle(popByArea.good)]}>
+                  <Animated.View style={[styles.chipIcon, styles.iconBadge, styles.goodIconBadge, pulseStyle(pulseByArea.good)]}>
                     <Ionicons name={area.icon} size={14} color={FACEBOOK_BLUE} />
                   </Animated.View>
                 ) : area.id === "bad" ? (
@@ -128,7 +128,7 @@ export default function FocusSetupScreen() {
                     </Animated.View>
                   </Animated.View>
                 ) : (
-                  <Animated.View style={popStyle(popByArea[area.id])}>
+                  <Animated.View style={pulseStyle(pulseByArea[area.id])}>
                     <Ionicons
                       name={area.icon}
                       size={16}
