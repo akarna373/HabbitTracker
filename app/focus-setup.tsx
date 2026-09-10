@@ -35,18 +35,18 @@ function useIconEntrance() {
       }
       const pulse = (value: Animated.Value) =>
         Animated.sequence([
-          Animated.timing(value, { toValue: 1, duration: 180, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-          Animated.timing(value, { toValue: 0, duration: 180, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+          Animated.timing(value, { toValue: 1, duration: 180, easing: Easing.out(Easing.ease), useNativeDriver: false }),
+          Animated.timing(value, { toValue: 0, duration: 180, easing: Easing.in(Easing.ease), useNativeDriver: false }),
         ]);
 
       Animated.sequence([
         Animated.delay(2000),
         Animated.parallel([
           Animated.sequence([
-            Animated.timing(badShake, { toValue: 1, duration: 80, easing: Easing.linear, useNativeDriver: true }),
-            Animated.timing(badShake, { toValue: -1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
-            Animated.timing(badShake, { toValue: 1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
-            Animated.timing(badShake, { toValue: 0, duration: 80, easing: Easing.linear, useNativeDriver: true }),
+            Animated.timing(badShake, { toValue: 1, duration: 80, easing: Easing.linear, useNativeDriver: false }),
+            Animated.timing(badShake, { toValue: -1, duration: 160, easing: Easing.linear, useNativeDriver: false }),
+            Animated.timing(badShake, { toValue: 1, duration: 160, easing: Easing.linear, useNativeDriver: false }),
+            Animated.timing(badShake, { toValue: 0, duration: 80, easing: Easing.linear, useNativeDriver: false }),
           ]),
           Animated.timing(badColor, { toValue: 1, duration: 480, easing: Easing.out(Easing.ease), useNativeDriver: false }),
         ]),
