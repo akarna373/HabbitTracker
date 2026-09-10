@@ -17,17 +17,14 @@ function useGentleShake() {
     let cancelled = false;
     AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
       if (reduced || cancelled) return;
-      const wiggle = () =>
-        Animated.sequence([
-          Animated.delay(2600),
-          Animated.timing(shake, { toValue: 1, duration: 80, easing: Easing.linear, useNativeDriver: true }),
-          Animated.timing(shake, { toValue: -1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
-          Animated.timing(shake, { toValue: 1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
-          Animated.timing(shake, { toValue: 0, duration: 80, easing: Easing.linear, useNativeDriver: true }),
-        ]).start(() => {
-          if (!cancelled) wiggle();
-        });
-      wiggle();
+      // Plays once, does not repeat.
+      Animated.sequence([
+        Animated.delay(600),
+        Animated.timing(shake, { toValue: 1, duration: 80, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(shake, { toValue: -1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(shake, { toValue: 1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(shake, { toValue: 0, duration: 80, easing: Easing.linear, useNativeDriver: true }),
+      ]).start();
     });
     return () => {
       cancelled = true;
@@ -39,7 +36,7 @@ function useGentleShake() {
 
 const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: "good", label: "Good habits", icon: "thumbs-up-outline" },
-  { id: "bad", label: "Track bad habits", icon: "thumbs-down-outline" },
+  { id: "bad", label: "Track bad habits", icon: "thumbs-down" },
   { id: "study", label: "Study", icon: "school-outline" },
   { id: "personal_goal", label: "Personal goals", icon: "flag-outline" },
   { id: "achiever", label: "Achiever", icon: "trophy-outline" },
