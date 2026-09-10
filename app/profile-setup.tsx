@@ -21,7 +21,6 @@ import { colors, spacing, typography } from "../lib/theme";
 const GENDERS: { id: Gender; label: string }[] = [
   { id: "female", label: "Female" },
   { id: "male", label: "Male" },
-  { id: "non_binary", label: "Non-binary" },
   { id: "unspecified", label: "Prefer not to say" },
 ];
 

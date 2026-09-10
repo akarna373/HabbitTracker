@@ -1,6 +1,6 @@
 import Storage from "expo-sqlite/kv-store";
 
-export type Gender = "female" | "male" | "non_binary" | "unspecified";
+export type Gender = "female" | "male" | "unspecified";
 
 export interface UserProfile {
   name: string;
