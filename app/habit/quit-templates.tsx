@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { ScrollView, StyleSheet } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ListRow } from "../../components/ListRow";
 import { PrimaryButton } from "../../components/PrimaryButton";
@@ -7,7 +7,7 @@ import { ScreenHeader } from "../../components/ScreenHeader";
 import { TemplateIcon } from "../../components/TemplateIcon";
 import { useDraftStore } from "../../lib/draftStore";
 import { CUSTOM_QUIT_TEMPLATE_ID, QUIT_TEMPLATES } from "../../lib/templates";
-import { colors, spacing } from "../../lib/theme";
+import { colors, spacing, typography } from "../../lib/theme";
 
 export default function QuitTemplatesScreen() {
   const set = useDraftStore((s) => s.set);
@@ -60,6 +60,9 @@ export default function QuitTemplatesScreen() {
           />
         ))}
         <PrimaryButton title="Create a custom quit habit" variant="outline" onPress={chooseCustom} />
+        <Pressable style={styles.skip} onPress={() => router.back()} hitSlop={8}>
+          <Text style={styles.skipText}>None of these — skip for now</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -68,4 +71,6 @@ export default function QuitTemplatesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+  skip: { alignItems: "center", paddingVertical: spacing.md },
+  skipText: { ...typography.caption, color: colors.textSecondary, textDecorationLine: "underline" },
 });
