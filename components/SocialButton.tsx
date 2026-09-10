@@ -37,7 +37,6 @@ const styles = StyleSheet.create({
   pressable: {
     width: "100%",
     borderRadius: radii.button,
-    overflow: "hidden",
     marginBottom: spacing.sm,
     // A fully transparent Pressable can fail to hit-test outside its painted
     // child on Android - keep a near-invisible real background.

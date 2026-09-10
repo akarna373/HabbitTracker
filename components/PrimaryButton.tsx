@@ -41,7 +41,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing.sm,
-    overflow: "hidden",
   },
   primary: { backgroundColor: colors.accentPink },
   // A literal "transparent" background can make Android only hit-test the
