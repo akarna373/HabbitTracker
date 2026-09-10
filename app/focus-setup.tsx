@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -6,12 +7,12 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { saveFocusAreas } from "../lib/focus";
 import { colors, spacing, typography } from "../lib/theme";
 
-const FOCUS_AREAS = [
-  { id: "good", label: "Good habits" },
-  { id: "bad", label: "Bad habits" },
-  { id: "study", label: "Study" },
-  { id: "personal_goal", label: "Personal goals" },
-  { id: "achiever", label: "Achiever" },
+const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: "good", label: "Good habits", icon: "thumbs-up-outline" },
+  { id: "bad", label: "Bad habits", icon: "thumbs-down-outline" },
+  { id: "study", label: "Study", icon: "school-outline" },
+  { id: "personal_goal", label: "Personal goals", icon: "flag-outline" },
+  { id: "achiever", label: "Achiever", icon: "trophy-outline" },
 ];
 
 export default function FocusSetupScreen() {
@@ -41,6 +42,12 @@ export default function FocusSetupScreen() {
                 onPress={() => toggle(area.id)}
                 style={[styles.chip, active && styles.chipActive]}
               >
+                <Ionicons
+                  name={area.icon}
+                  size={16}
+                  color={active ? colors.accentPink : colors.textSecondary}
+                  style={styles.chipIcon}
+                />
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{area.label}</Text>
               </Pressable>
             );
@@ -62,12 +69,15 @@ const styles = StyleSheet.create({
   subtitle: { ...typography.caption, marginBottom: spacing.lg },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  chipIcon: { marginRight: spacing.xs },
   chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
   chipText: { ...typography.body },
   chipTextActive: { color: colors.accentPink, fontWeight: "700" },
