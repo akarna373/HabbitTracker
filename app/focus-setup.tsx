@@ -19,6 +19,7 @@ const READING_PACE_MS = 550;
 function useIconEntrance() {
   const badShake = useRef(new Animated.Value(0)).current;
   const badColor = useRef(new Animated.Value(0)).current;
+  const goodColor = useRef(new Animated.Value(0)).current;
   const goodPulse = useRef(new Animated.Value(0)).current;
   const studyPulse = useRef(new Animated.Value(0)).current;
   const goalPulse = useRef(new Animated.Value(0)).current;
@@ -27,7 +28,11 @@ function useIconEntrance() {
   useEffect(() => {
     let cancelled = false;
     AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
-      if (cancelled || reduced) return;
+      if (cancelled) return;
+      if (reduced) {
+        goodColor.setValue(1);
+        return;
+      }
       const pulse = (value: Animated.Value) =>
         Animated.sequence([
           Animated.timing(value, { toValue: 1, duration: 180, easing: Easing.out(Easing.ease), useNativeDriver: true }),
@@ -46,7 +51,10 @@ function useIconEntrance() {
           Animated.timing(badColor, { toValue: 1, duration: 480, easing: Easing.out(Easing.ease), useNativeDriver: false }),
         ]),
         Animated.delay(READING_PACE_MS),
-        pulse(goodPulse),
+        Animated.parallel([
+          pulse(goodPulse),
+          Animated.timing(goodColor, { toValue: 1, duration: 420, easing: Easing.out(Easing.ease), useNativeDriver: false }),
+        ]),
         Animated.delay(READING_PACE_MS),
         pulse(studyPulse),
         Animated.delay(READING_PACE_MS),
@@ -58,14 +66,14 @@ function useIconEntrance() {
     return () => {
       cancelled = true;
     };
-  }, [badShake, badColor, goodPulse, studyPulse, goalPulse, achieverPulse]);
+  }, [badShake, badColor, goodColor, goodPulse, studyPulse, goalPulse, achieverPulse]);
 
   const badRotate = badShake.interpolate({ inputRange: [-1, 1], outputRange: ["-4deg", "4deg"] });
-  return { badRotate, badColor, goodPulse, studyPulse, goalPulse, achieverPulse };
+  return { badRotate, badColor, goodColor, goodPulse, studyPulse, goalPulse, achieverPulse };
 }
 
 const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: "good", label: "Good habits", icon: "thumbs-up" },
+  { id: "good", label: "Build good habits", icon: "thumbs-up" },
   { id: "bad", label: "Track bad habits", icon: "thumbs-down" },
   { id: "study", label: "Study", icon: "school-outline" },
   { id: "personal_goal", label: "Personal goals", icon: "flag-outline" },
@@ -74,12 +82,17 @@ const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyp
 
 export default function FocusSetupScreen() {
   const [selected, setSelected] = useState<string[]>([]);
-  const { badRotate, badColor, goodPulse, studyPulse, goalPulse, achieverPulse } = useIconEntrance();
-  const badgeBg = badColor.interpolate({
+  const { badRotate, badColor, goodColor, goodPulse, studyPulse, goalPulse, achieverPulse } = useIconEntrance();
+  const badBadgeBg = badColor.interpolate({
     inputRange: [0, 1],
     outputRange: ["rgba(150,150,160,0.18)", "rgba(255,90,98,0.16)"],
   });
-  const grayIconOpacity = badColor.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const badGrayIconOpacity = badColor.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const goodBadgeBg = goodColor.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["rgba(150,150,160,0.18)", "rgba(24,119,242,0.16)"],
+  });
+  const goodGrayIconOpacity = goodColor.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
   const pulseByArea: Record<string, Animated.Value> = {
     good: goodPulse,
     study: studyPulse,
@@ -117,13 +130,18 @@ export default function FocusSetupScreen() {
                 style={[styles.chip, active && styles.chipActive]}
               >
                 {area.id === "good" ? (
-                  <Animated.View style={[styles.chipIcon, styles.iconBadge, styles.goodIconBadge, pulseStyle(pulseByArea.good)]}>
-                    <Ionicons name={area.icon} size={14} color={FACEBOOK_BLUE} />
+                  <Animated.View
+                    style={[styles.chipIcon, styles.iconBadge, { backgroundColor: goodBadgeBg }, pulseStyle(pulseByArea.good)]}
+                  >
+                    <Ionicons name={area.icon} size={14} color={FACEBOOK_BLUE} style={styles.badIconOverlay} />
+                    <Animated.View style={{ opacity: goodGrayIconOpacity }}>
+                      <Ionicons name={area.icon} size={14} color={colors.textMuted} />
+                    </Animated.View>
                   </Animated.View>
                 ) : area.id === "bad" ? (
-                  <Animated.View style={[styles.chipIcon, styles.iconBadge, { backgroundColor: badgeBg }]}>
+                  <Animated.View style={[styles.chipIcon, styles.iconBadge, { backgroundColor: badBadgeBg }]}>
                     <Ionicons name={area.icon} size={14} color={colors.accentRed} style={styles.badIconOverlay} />
-                    <Animated.View style={{ opacity: grayIconOpacity }}>
+                    <Animated.View style={{ opacity: badGrayIconOpacity }}>
                       <Ionicons name={area.icon} size={14} color={colors.textMuted} />
                     </Animated.View>
                   </Animated.View>
@@ -183,7 +201,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  goodIconBadge: { backgroundColor: "rgba(24,119,242,0.16)" },
   chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
   chipText: { ...typography.body },
   chipTextActive: { color: colors.accentPink },
