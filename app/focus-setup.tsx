@@ -7,40 +7,61 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { saveFocusAreas } from "../lib/focus";
 import { colors, spacing, typography } from "../lib/theme";
 
-const FACEBOOK_BLUE = "#1877F2";
-
 // All five chips render fully visible immediately. After a 2s pause, "bad
-// habits" wiggles and its icon reveals from grey to red. Then, at a reading
-// pace (even gaps, not rushed), a brief attention pulse scans across the
-// remaining chips left to right: good -> study -> personal goals -> achiever
-// - as if the user's eyes were moving from one to the next.
+// habits" wiggles while every chip's icon reveals from grey to its own
+// colour, each in turn at a reading pace (even gaps, not rushed): bad ->
+// good -> study -> fitness -> projects - as if the user's eyes were moving
+// from one option to the next.
 const READING_PACE_MS = 550;
+const INITIAL_DELAY_MS = 2000;
+const REVEAL_MS = 420;
+
+interface AreaDef {
+  id: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  tintBg: string;
+}
+
+const FOCUS_AREAS: AreaDef[] = [
+  { id: "good", label: "Build good habits", icon: "thumbs-up", color: "#1877F2", tintBg: "rgba(24,119,242,0.16)" },
+  { id: "bad", label: "Track bad habits", icon: "thumbs-down", color: colors.accentRed, tintBg: "rgba(255,90,98,0.16)" },
+  { id: "study", label: "Study", icon: "school", color: "#8B5CF6", tintBg: "rgba(139,92,246,0.16)" },
+  { id: "personal_goal", label: "Fitness", icon: "heart", color: "#FF3B5C", tintBg: "rgba(255,59,92,0.16)" },
+  { id: "achiever", label: "Projects", icon: "trophy", color: "#F5A623", tintBg: "rgba(245,166,35,0.16)" },
+];
+
+const GREY_TINT_BG = "rgba(150,150,160,0.18)";
 
 function useIconEntrance() {
   const badShake = useRef(new Animated.Value(0)).current;
-  const badColor = useRef(new Animated.Value(0)).current;
-  const goodColor = useRef(new Animated.Value(0)).current;
-  const goodPulse = useRef(new Animated.Value(0)).current;
-  const studyPulse = useRef(new Animated.Value(0)).current;
-  const goalPulse = useRef(new Animated.Value(0)).current;
-  const achieverPulse = useRef(new Animated.Value(0)).current;
+  const colorByArea = useRef<Record<string, Animated.Value>>(
+    Object.fromEntries(FOCUS_AREAS.map((a) => [a.id, new Animated.Value(0)]))
+  ).current;
+  const pulseByArea = useRef<Record<string, Animated.Value>>(
+    Object.fromEntries(FOCUS_AREAS.filter((a) => a.id !== "bad").map((a) => [a.id, new Animated.Value(0)]))
+  ).current;
 
   useEffect(() => {
     let cancelled = false;
     AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
       if (cancelled) return;
       if (reduced) {
-        goodColor.setValue(1);
+        Object.values(colorByArea).forEach((v) => v.setValue(1));
         return;
       }
+
       const pulse = (value: Animated.Value) =>
         Animated.sequence([
           Animated.timing(value, { toValue: 1, duration: 180, easing: Easing.out(Easing.ease), useNativeDriver: false }),
           Animated.timing(value, { toValue: 0, duration: 180, easing: Easing.in(Easing.ease), useNativeDriver: false }),
         ]);
+      const reveal = (id: string) =>
+        Animated.timing(colorByArea[id], { toValue: 1, duration: REVEAL_MS, easing: Easing.out(Easing.ease), useNativeDriver: false });
 
       Animated.sequence([
-        Animated.delay(2000),
+        Animated.delay(INITIAL_DELAY_MS),
         Animated.parallel([
           Animated.sequence([
             Animated.timing(badShake, { toValue: 1, duration: 80, easing: Easing.linear, useNativeDriver: false }),
@@ -48,62 +69,31 @@ function useIconEntrance() {
             Animated.timing(badShake, { toValue: 1, duration: 160, easing: Easing.linear, useNativeDriver: false }),
             Animated.timing(badShake, { toValue: 0, duration: 80, easing: Easing.linear, useNativeDriver: false }),
           ]),
-          Animated.timing(badColor, { toValue: 1, duration: 480, easing: Easing.out(Easing.ease), useNativeDriver: false }),
+          reveal("bad"),
         ]),
         Animated.delay(READING_PACE_MS),
-        Animated.parallel([
-          pulse(goodPulse),
-          Animated.timing(goodColor, { toValue: 1, duration: 420, easing: Easing.out(Easing.ease), useNativeDriver: false }),
-        ]),
+        Animated.parallel([pulse(pulseByArea.good), reveal("good")]),
         Animated.delay(READING_PACE_MS),
-        pulse(studyPulse),
+        Animated.parallel([pulse(pulseByArea.study), reveal("study")]),
         Animated.delay(READING_PACE_MS),
-        pulse(goalPulse),
+        Animated.parallel([pulse(pulseByArea.personal_goal), reveal("personal_goal")]),
         Animated.delay(READING_PACE_MS),
-        pulse(achieverPulse),
+        Animated.parallel([pulse(pulseByArea.achiever), reveal("achiever")]),
       ]).start();
     });
     return () => {
       cancelled = true;
     };
-  }, [badShake, badColor, goodColor, goodPulse, studyPulse, goalPulse, achieverPulse]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [badShake]);
 
   const badRotate = badShake.interpolate({ inputRange: [-1, 1], outputRange: ["-4deg", "4deg"] });
-  return { badRotate, badColor, goodColor, goodPulse, studyPulse, goalPulse, achieverPulse };
+  return { badRotate, colorByArea, pulseByArea };
 }
-
-const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: "good", label: "Build good habits", icon: "thumbs-up" },
-  { id: "bad", label: "Track bad habits", icon: "thumbs-down" },
-  { id: "study", label: "Study", icon: "school-outline" },
-  { id: "personal_goal", label: "Personal goals", icon: "flag-outline" },
-  { id: "achiever", label: "Achiever", icon: "trophy-outline" },
-];
 
 export default function FocusSetupScreen() {
   const [selected, setSelected] = useState<string[]>([]);
-  const { badRotate, badColor, goodColor, goodPulse, studyPulse, goalPulse, achieverPulse } = useIconEntrance();
-  const badBadgeBg = badColor.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["rgba(150,150,160,0.18)", "rgba(255,90,98,0.16)"],
-  });
-  const badGrayIconOpacity = badColor.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-  const goodBadgeBg = goodColor.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["rgba(150,150,160,0.18)", "rgba(24,119,242,0.16)"],
-  });
-  const goodGrayIconOpacity = goodColor.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-  const pulseByArea: Record<string, Animated.Value> = {
-    good: goodPulse,
-    study: studyPulse,
-    personal_goal: goalPulse,
-    achiever: achieverPulse,
-  };
-  // Always fully visible - the pulse briefly enlarges an icon as the "glance"
-  // passes over it, then settles back to its normal size.
-  const pulseStyle = (pulse: Animated.Value) => ({
-    transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) }],
-  });
+  const { badRotate, colorByArea, pulseByArea } = useIconEntrance();
 
   const toggle = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -123,41 +113,36 @@ export default function FocusSetupScreen() {
         <View style={styles.chipRow}>
           {FOCUS_AREAS.map((area) => {
             const active = selected.includes(area.id);
+            const colorProgress = colorByArea[area.id];
+            const badgeBg = colorProgress.interpolate({ inputRange: [0, 1], outputRange: [GREY_TINT_BG, area.tintBg] });
+            const grayIconOpacity = colorProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+            const pulse = pulseByArea[area.id];
+
             const chip = (
               <Pressable
                 key={area.id}
                 onPress={() => toggle(area.id)}
                 style={[styles.chip, active && styles.chipActive]}
               >
-                {area.id === "good" ? (
-                  <Animated.View
-                    style={[styles.chipIcon, styles.iconBadge, { backgroundColor: goodBadgeBg }, pulseStyle(pulseByArea.good)]}
-                  >
-                    <Ionicons name={area.icon} size={14} color={FACEBOOK_BLUE} style={styles.badIconOverlay} />
-                    <Animated.View style={{ opacity: goodGrayIconOpacity }}>
-                      <Ionicons name={area.icon} size={14} color={colors.textMuted} />
-                    </Animated.View>
+                <Animated.View
+                  style={[
+                    styles.chipIcon,
+                    styles.iconBadge,
+                    { backgroundColor: badgeBg },
+                    pulse
+                      ? { transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) }] }
+                      : null,
+                  ]}
+                >
+                  <Ionicons name={area.icon} size={14} color={area.color} style={styles.badIconOverlay} />
+                  <Animated.View style={{ opacity: grayIconOpacity }}>
+                    <Ionicons name={area.icon} size={14} color={colors.textMuted} />
                   </Animated.View>
-                ) : area.id === "bad" ? (
-                  <Animated.View style={[styles.chipIcon, styles.iconBadge, { backgroundColor: badBadgeBg }]}>
-                    <Ionicons name={area.icon} size={14} color={colors.accentRed} style={styles.badIconOverlay} />
-                    <Animated.View style={{ opacity: badGrayIconOpacity }}>
-                      <Ionicons name={area.icon} size={14} color={colors.textMuted} />
-                    </Animated.View>
-                  </Animated.View>
-                ) : (
-                  <Animated.View style={pulseStyle(pulseByArea[area.id])}>
-                    <Ionicons
-                      name={area.icon}
-                      size={16}
-                      color={active ? colors.accentPink : colors.textSecondary}
-                      style={styles.chipIcon}
-                    />
-                  </Animated.View>
-                )}
+                </Animated.View>
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{area.label}</Text>
               </Pressable>
             );
+
             if (area.id === "bad") {
               return (
                 <Animated.View key={area.id} style={{ transform: [{ rotate: badRotate }] }}>
