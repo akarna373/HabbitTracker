@@ -165,6 +165,6 @@ const styles = StyleSheet.create({
   },
   chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
   chipText: { ...typography.caption },
-  chipTextActive: { color: colors.accentPink, fontWeight: "700" },
+  chipTextActive: { color: colors.accentPink },
   footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
 });

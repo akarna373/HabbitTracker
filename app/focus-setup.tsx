@@ -80,6 +80,6 @@ const styles = StyleSheet.create({
   chipIcon: { marginRight: spacing.xs },
   chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
   chipText: { ...typography.body },
-  chipTextActive: { color: colors.accentPink, fontWeight: "700" },
+  chipTextActive: { color: colors.accentPink },
   footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
 });
