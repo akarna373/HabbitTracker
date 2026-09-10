@@ -1,11 +1,41 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ColorFadeIcon } from "../components/ColorFadeIcon";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { saveFocusAreas } from "../lib/focus";
 import { colors, spacing, typography } from "../lib/theme";
+
+const GOOD_ICON_COLORS = [colors.accentPink, colors.accentRed, colors.softAccent];
+
+function useGentleShake() {
+  const shake = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (reduced || cancelled) return;
+      const wiggle = () =>
+        Animated.sequence([
+          Animated.delay(2600),
+          Animated.timing(shake, { toValue: 1, duration: 80, easing: Easing.linear, useNativeDriver: true }),
+          Animated.timing(shake, { toValue: -1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
+          Animated.timing(shake, { toValue: 1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
+          Animated.timing(shake, { toValue: 0, duration: 80, easing: Easing.linear, useNativeDriver: true }),
+        ]).start(() => {
+          if (!cancelled) wiggle();
+        });
+      wiggle();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [shake]);
+
+  return shake.interpolate({ inputRange: [-1, 1], outputRange: ["-4deg", "4deg"] });
+}
 
 const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: "good", label: "Good habits", icon: "thumbs-up-outline" },
@@ -17,6 +47,7 @@ const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyp
 
 export default function FocusSetupScreen() {
   const [selected, setSelected] = useState<string[]>([]);
+  const badShake = useGentleShake();
 
   const toggle = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -36,21 +67,35 @@ export default function FocusSetupScreen() {
         <View style={styles.chipRow}>
           {FOCUS_AREAS.map((area) => {
             const active = selected.includes(area.id);
-            return (
+            const chip = (
               <Pressable
                 key={area.id}
                 onPress={() => toggle(area.id)}
                 style={[styles.chip, active && styles.chipActive]}
               >
-                <Ionicons
-                  name={area.icon}
-                  size={16}
-                  color={active ? colors.accentPink : colors.textSecondary}
-                  style={styles.chipIcon}
-                />
+                {area.id === "good" ? (
+                  <View style={styles.chipIcon}>
+                    <ColorFadeIcon name={area.icon} colors={GOOD_ICON_COLORS} size={16} />
+                  </View>
+                ) : (
+                  <Ionicons
+                    name={area.icon}
+                    size={16}
+                    color={active ? colors.accentPink : colors.textSecondary}
+                    style={styles.chipIcon}
+                  />
+                )}
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{area.label}</Text>
               </Pressable>
             );
+            if (area.id === "bad") {
+              return (
+                <Animated.View key={area.id} style={{ transform: [{ rotate: badShake }] }}>
+                  {chip}
+                </Animated.View>
+              );
+            }
+            return chip;
           })}
         </View>
       </ScrollView>
