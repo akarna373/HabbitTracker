@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { useDraftStore } from "../lib/draftStore";
 import { saveFocusAreas } from "../lib/focus";
 import { colors, spacing, typography } from "../lib/theme";
 
@@ -102,9 +103,27 @@ function useIconEntrance() {
 export default function FocusSetupScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const { badRotate, colorByArea, pulseByArea, introDone, continueOpacity } = useIconEntrance();
+  const resetDraft = useDraftStore((s) => s.reset);
+  const setDraft = useDraftStore((s) => s.set);
 
   const toggle = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  // "Track bad habits" / "Build good habits" skip the preference toggle
+  // entirely and jump straight into that category's real templates, so the
+  // user sees the concrete presets (smoking/alcohol/pan masala, water/read/
+  // move, etc.) rather than just recording an abstract preference.
+  const openTemplates = (kind: "good" | "quit") => {
+    resetDraft();
+    setDraft({ kind, category: kind });
+    router.push(kind === "good" ? "/habit/good-templates" : "/habit/quit-templates");
+  };
+
+  const handlePress = (id: string) => {
+    if (id === "good") return openTemplates("good");
+    if (id === "bad") return openTemplates("quit");
+    toggle(id);
   };
 
   const finish = async () => {
@@ -129,7 +148,7 @@ export default function FocusSetupScreen() {
             const chip = (
               <Pressable
                 key={area.id}
-                onPress={() => toggle(area.id)}
+                onPress={() => handlePress(area.id)}
                 disabled={!introDone}
                 style={[styles.chip, active && styles.chipActive, active && styles.chipSelected]}
               >
