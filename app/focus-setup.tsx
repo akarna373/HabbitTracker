@@ -9,7 +9,7 @@ import { colors, spacing, typography } from "../lib/theme";
 
 const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: "good", label: "Good habits", icon: "thumbs-up-outline" },
-  { id: "bad", label: "Bad habits", icon: "thumbs-down-outline" },
+  { id: "bad", label: "Track bad habits", icon: "thumbs-down-outline" },
   { id: "study", label: "Study", icon: "school-outline" },
   { id: "personal_goal", label: "Personal goals", icon: "flag-outline" },
   { id: "achiever", label: "Achiever", icon: "trophy-outline" },
