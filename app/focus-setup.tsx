@@ -9,41 +9,60 @@ import { colors, spacing, typography } from "../lib/theme";
 
 const FACEBOOK_BLUE = "#1877F2";
 
-// Drives both the one-shot wiggle and the grey -> coral-red reveal of the
-// "bad habits" icon, timed to play together.
-function useBadHabitEntrance() {
-  const shake = useRef(new Animated.Value(0)).current;
-  const colorProgress = useRef(new Animated.Value(0)).current;
+// Orchestrates one entrance sequence across all five chips, each animating
+// only after the previous one finishes: bad (2s initial delay) -> good ->
+// study -> personal goals -> achiever, with each gap shorter than the last.
+function useIconEntrance() {
+  const badShake = useRef(new Animated.Value(0)).current;
+  const badColor = useRef(new Animated.Value(0)).current;
+  const goodPop = useRef(new Animated.Value(0)).current;
+  const studyPop = useRef(new Animated.Value(0)).current;
+  const goalPop = useRef(new Animated.Value(0)).current;
+  const achieverPop = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let cancelled = false;
     AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
       if (cancelled) return;
       if (reduced) {
-        colorProgress.setValue(1);
+        badColor.setValue(1);
+        goodPop.setValue(1);
+        studyPop.setValue(1);
+        goalPop.setValue(1);
+        achieverPop.setValue(1);
         return;
       }
-      Animated.parallel([
-        Animated.sequence([
-          Animated.delay(600),
-          Animated.timing(shake, { toValue: 1, duration: 80, easing: Easing.linear, useNativeDriver: true }),
-          Animated.timing(shake, { toValue: -1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
-          Animated.timing(shake, { toValue: 1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
-          Animated.timing(shake, { toValue: 0, duration: 80, easing: Easing.linear, useNativeDriver: true }),
+      const pop = (value: Animated.Value) =>
+        Animated.timing(value, { toValue: 1, duration: 280, easing: Easing.out(Easing.back(1.4)), useNativeDriver: true });
+
+      Animated.sequence([
+        Animated.delay(2000),
+        Animated.parallel([
+          Animated.sequence([
+            Animated.timing(badShake, { toValue: 1, duration: 80, easing: Easing.linear, useNativeDriver: true }),
+            Animated.timing(badShake, { toValue: -1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
+            Animated.timing(badShake, { toValue: 1, duration: 160, easing: Easing.linear, useNativeDriver: true }),
+            Animated.timing(badShake, { toValue: 0, duration: 80, easing: Easing.linear, useNativeDriver: true }),
+          ]),
+          Animated.timing(badColor, { toValue: 1, duration: 480, easing: Easing.out(Easing.ease), useNativeDriver: false }),
         ]),
-        Animated.sequence([
-          Animated.delay(600),
-          Animated.timing(colorProgress, { toValue: 1, duration: 480, easing: Easing.out(Easing.ease), useNativeDriver: false }),
-        ]),
+        Animated.delay(300),
+        pop(goodPop),
+        Animated.delay(200),
+        pop(studyPop),
+        Animated.delay(150),
+        pop(goalPop),
+        Animated.delay(100),
+        pop(achieverPop),
       ]).start();
     });
     return () => {
       cancelled = true;
     };
-  }, [shake, colorProgress]);
+  }, [badShake, badColor, goodPop, studyPop, goalPop, achieverPop]);
 
-  const rotate = shake.interpolate({ inputRange: [-1, 1], outputRange: ["-4deg", "4deg"] });
-  return { rotate, colorProgress };
+  const badRotate = badShake.interpolate({ inputRange: [-1, 1], outputRange: ["-4deg", "4deg"] });
+  return { badRotate, badColor, goodPop, studyPop, goalPop, achieverPop };
 }
 
 const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -56,12 +75,22 @@ const FOCUS_AREAS: { id: string; label: string; icon: keyof typeof Ionicons.glyp
 
 export default function FocusSetupScreen() {
   const [selected, setSelected] = useState<string[]>([]);
-  const { rotate: badShake, colorProgress } = useBadHabitEntrance();
-  const badgeBg = colorProgress.interpolate({
+  const { badRotate, badColor, goodPop, studyPop, goalPop, achieverPop } = useIconEntrance();
+  const badgeBg = badColor.interpolate({
     inputRange: [0, 1],
     outputRange: ["rgba(150,150,160,0.18)", "rgba(255,90,98,0.16)"],
   });
-  const grayIconOpacity = colorProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const grayIconOpacity = badColor.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const popByArea: Record<string, Animated.Value> = {
+    good: goodPop,
+    study: studyPop,
+    personal_goal: goalPop,
+    achiever: achieverPop,
+  };
+  const popStyle = (pop: Animated.Value) => ({
+    opacity: pop,
+    transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
+  });
 
   const toggle = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -88,9 +117,9 @@ export default function FocusSetupScreen() {
                 style={[styles.chip, active && styles.chipActive]}
               >
                 {area.id === "good" ? (
-                  <View style={[styles.chipIcon, styles.iconBadge, styles.goodIconBadge]}>
+                  <Animated.View style={[styles.chipIcon, styles.iconBadge, styles.goodIconBadge, popStyle(popByArea.good)]}>
                     <Ionicons name={area.icon} size={14} color={FACEBOOK_BLUE} />
-                  </View>
+                  </Animated.View>
                 ) : area.id === "bad" ? (
                   <Animated.View style={[styles.chipIcon, styles.iconBadge, { backgroundColor: badgeBg }]}>
                     <Ionicons name={area.icon} size={14} color={colors.accentRed} style={styles.badIconOverlay} />
@@ -99,19 +128,21 @@ export default function FocusSetupScreen() {
                     </Animated.View>
                   </Animated.View>
                 ) : (
-                  <Ionicons
-                    name={area.icon}
-                    size={16}
-                    color={active ? colors.accentPink : colors.textSecondary}
-                    style={styles.chipIcon}
-                  />
+                  <Animated.View style={popStyle(popByArea[area.id])}>
+                    <Ionicons
+                      name={area.icon}
+                      size={16}
+                      color={active ? colors.accentPink : colors.textSecondary}
+                      style={styles.chipIcon}
+                    />
+                  </Animated.View>
                 )}
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{area.label}</Text>
               </Pressable>
             );
             if (area.id === "bad") {
               return (
-                <Animated.View key={area.id} style={{ transform: [{ rotate: badShake }] }}>
+                <Animated.View key={area.id} style={{ transform: [{ rotate: badRotate }] }}>
                   {chip}
                 </Animated.View>
               );
