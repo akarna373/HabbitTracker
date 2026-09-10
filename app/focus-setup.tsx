@@ -36,6 +36,8 @@ const GREY_TINT_BG = "rgba(150,150,160,0.18)";
 
 function useIconEntrance() {
   const badShake = useRef(new Animated.Value(0)).current;
+  const continueOpacity = useRef(new Animated.Value(0)).current;
+  const [introDone, setIntroDone] = useState(false);
   const colorByArea = useRef<Record<string, Animated.Value>>(
     Object.fromEntries(FOCUS_AREAS.map((a) => [a.id, new Animated.Value(0)]))
   ).current;
@@ -45,10 +47,16 @@ function useIconEntrance() {
 
   useEffect(() => {
     let cancelled = false;
+    const markIntroDone = () => {
+      if (cancelled) return;
+      setIntroDone(true);
+      Animated.timing(continueOpacity, { toValue: 1, duration: 300, easing: Easing.out(Easing.ease), useNativeDriver: false }).start();
+    };
     AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
       if (cancelled) return;
       if (reduced) {
         Object.values(colorByArea).forEach((v) => v.setValue(1));
+        markIntroDone();
         return;
       }
 
@@ -79,7 +87,7 @@ function useIconEntrance() {
         Animated.parallel([pulse(pulseByArea.personal_goal), reveal("personal_goal")]),
         Animated.delay(READING_PACE_MS),
         Animated.parallel([pulse(pulseByArea.achiever), reveal("achiever")]),
-      ]).start();
+      ]).start(markIntroDone);
     });
     return () => {
       cancelled = true;
@@ -88,12 +96,12 @@ function useIconEntrance() {
   }, [badShake]);
 
   const badRotate = badShake.interpolate({ inputRange: [-1, 1], outputRange: ["-4deg", "4deg"] });
-  return { badRotate, colorByArea, pulseByArea };
+  return { badRotate, colorByArea, pulseByArea, introDone, continueOpacity };
 }
 
 export default function FocusSetupScreen() {
   const [selected, setSelected] = useState<string[]>([]);
-  const { badRotate, colorByArea, pulseByArea } = useIconEntrance();
+  const { badRotate, colorByArea, pulseByArea, introDone, continueOpacity } = useIconEntrance();
 
   const toggle = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -122,7 +130,8 @@ export default function FocusSetupScreen() {
               <Pressable
                 key={area.id}
                 onPress={() => toggle(area.id)}
-                style={[styles.chip, active && styles.chipActive]}
+                disabled={!introDone}
+                style={[styles.chip, active && styles.chipActive, active && styles.chipSelected]}
               >
                 <Animated.View
                   style={[
@@ -155,8 +164,10 @@ export default function FocusSetupScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
-        <PrimaryButton title="Continue" onPress={finish} />
+      <View style={styles.footer} pointerEvents={introDone ? "auto" : "none"}>
+        <Animated.View style={{ opacity: continueOpacity }}>
+          <PrimaryButton title="Continue" onPress={finish} />
+        </Animated.View>
       </View>
     </SafeAreaView>
   );
@@ -191,6 +202,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
+  chipSelected: { transform: [{ scale: 1.06 }] },
   chipText: { ...typography.body },
   chipTextActive: { color: colors.accentPink },
   footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
