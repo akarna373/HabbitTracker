@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
 import {
@@ -18,9 +19,9 @@ import { markOnboardingSeen } from "../lib/onboarding";
 import { normalizeUsername, saveProfile, type Gender } from "../lib/profile";
 import { colors, spacing, typography } from "../lib/theme";
 
-const GENDERS: { id: Gender; label: string }[] = [
-  { id: "female", label: "Female" },
-  { id: "male", label: "Male" },
+const GENDERS: { id: Gender; label: string; icon?: keyof typeof Ionicons.glyphMap }[] = [
+  { id: "female", label: "Female", icon: "female" },
+  { id: "male", label: "Male", icon: "male" },
   { id: "unspecified", label: "Prefer not to say" },
 ];
 
@@ -134,6 +135,14 @@ export default function ProfileSetupScreen() {
                 onPress={() => setGender(gender === g.id ? null : g.id)}
                 style={[styles.chip, gender === g.id && styles.chipActive]}
               >
+                {g.icon ? (
+                  <Ionicons
+                    name={g.icon}
+                    size={15}
+                    color={gender === g.id ? colors.accentPink : colors.textSecondary}
+                    style={styles.chipIcon}
+                  />
+                ) : null}
                 <Text style={[styles.chipText, gender === g.id && styles.chipTextActive]}>{g.label}</Text>
               </Pressable>
             ))}
@@ -162,6 +171,8 @@ const styles = StyleSheet.create({
   usernameInput: { flex: 1 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: 20,
@@ -172,6 +183,7 @@ const styles = StyleSheet.create({
     // real background so the whole chip is tappable.
     backgroundColor: "rgba(11,10,15,0.01)",
   },
+  chipIcon: { marginRight: spacing.xs },
   chipActive: { borderColor: colors.accentPink, backgroundColor: colors.surface },
   chipText: { ...typography.caption },
   chipTextActive: { color: colors.accentPink },
