@@ -5,11 +5,12 @@ interface CardProps {
   children: React.ReactNode;
   highlighted?: boolean;
   onPress?: () => void;
+  onLongPress?: () => void;
   disabled?: boolean;
   style?: ViewStyle;
 }
 
-export function Card({ children, highlighted, onPress, disabled, style }: CardProps) {
+export function Card({ children, highlighted, onPress, onLongPress, disabled, style }: CardProps) {
   const content = (
     <View
       style={[
@@ -23,10 +24,14 @@ export function Card({ children, highlighted, onPress, disabled, style }: CardPr
     </View>
   );
 
-  if (!onPress) return content;
+  if (!onPress && !onLongPress) return content;
 
   return (
-    <Pressable onPress={disabled ? undefined : onPress} disabled={disabled}>
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      onLongPress={disabled ? undefined : onLongPress}
+      disabled={disabled}
+    >
       {content}
     </Pressable>
   );

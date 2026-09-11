@@ -64,6 +64,7 @@ interface StoreState {
   init: () => Promise<void>;
   createHabit: (draft: NewHabitDraft) => Promise<string>;
   deleteHabit: (habitId: string) => Promise<void>;
+  archiveHabit: (habitId: string) => Promise<void>;
   incrementAmount: (habitId: string, date: string, delta: number) => Promise<void>;
   toggleMicrotask: (habitId: string, date: string, microtaskId: string) => Promise<void>;
   saveReflection: (habitId: string, date: string, text: string) => Promise<void>;
@@ -221,6 +222,21 @@ export const useStore = create<StoreState>((set, get) => ({
         logsByHabit: restLogs,
       };
     });
+  },
+
+  archiveHabit: async (habitId) => {
+    const db = await getDb();
+    const habit = get().habits.find((h) => h.id === habitId);
+    if (habit) {
+      await cancelNotification(habit.reminderNotificationId);
+      await cancelNotification(habit.summaryNotificationId);
+    }
+    const now = new Date().toISOString();
+    await db.runAsync("UPDATE habits SET archivedAt = ? WHERE id = ?", [now, habitId]);
+
+    // Microtasks and daily_logs rows stay in the database untouched - archiving
+    // only hides the habit from active lists, it never deletes its history.
+    set((s) => ({ habits: s.habits.filter((h) => h.id !== habitId) }));
   },
 
   incrementAmount: async (habitId, date, delta) => {

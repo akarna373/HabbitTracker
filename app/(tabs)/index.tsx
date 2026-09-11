@@ -4,11 +4,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
 import { ProfileBadge } from "../../components/ProfileBadge";
 import { ProgressBar } from "../../components/ProgressBar";
+import { SwipeableHabitTile } from "../../components/SwipeableHabitTile";
 import { formatLongDate, todayISO } from "../../lib/dates";
 import { formatTime12h, isHabitCompleteOn } from "../../lib/progress";
 import { useStore } from "../../lib/store";
 import { colors, spacing, typography } from "../../lib/theme";
-import type { Habit } from "../../lib/types";
+import type { DailyLog, Habit } from "../../lib/types";
 
 export default function TodayScreen() {
   const habits = useStore((s) => s.habits);
@@ -47,7 +48,7 @@ export default function TodayScreen() {
             </Card>
           </View>
         }
-        renderItem={({ item }) => <HabitCard habit={item} />}
+        renderItem={({ item }) => <TodayHabitTile habit={item} logs={logsByHabit[item.id]} today={today} />}
         ListEmptyComponent={
           <Card>
             <Text style={styles.emptyTitle}>No habits yet</Text>
@@ -63,32 +64,30 @@ export default function TodayScreen() {
   );
 }
 
-function HabitCard({ habit }: { habit: Habit }) {
-  const logsByHabit = useStore((s) => s.logsByHabit);
-  const logs = logsByHabit[habit.id];
-  const today = todayISO();
+function TodayHabitTile({ habit, logs, today }: { habit: Habit; logs: DailyLog[] | undefined; today: string }) {
   const log = logs?.find((l) => l.date === today);
   const done = isHabitCompleteOn(habit, logs, today);
 
   let subtitle = "";
   if (habit.kind === "quit") {
-    subtitle = log
-      ? `${log.amount} ${habit.unit ?? ""} logged today`
-      : "Check in this evening";
+    subtitle = log ? `${log.amount} ${habit.unit ?? ""} logged today` : "Check in this evening";
   } else if (habit.trackingMethod === "amount") {
     subtitle = `${log?.amount ?? 0} / ${habit.targetAmount ?? "?"} ${habit.unit ?? ""}`;
   } else {
     subtitle = done ? "Checked in" : "Not checked in yet";
   }
 
+  const reminderText =
+    habit.reminderEnabled && habit.reminderTime ? `Reminder ${formatTime12h(habit.reminderTime)}` : null;
+
   return (
-    <Card onPress={() => router.push(`/habit/${habit.id}`)} highlighted={done}>
-      <Text style={styles.habitName}>{habit.name}</Text>
-      <Text style={styles.habitSubtitle}>{subtitle}</Text>
-      {habit.reminderEnabled && habit.reminderTime ? (
-        <Text style={styles.habitReminder}>Reminder {formatTime12h(habit.reminderTime)}</Text>
-      ) : null}
-    </Card>
+    <SwipeableHabitTile
+      habit={habit}
+      done={done}
+      subtitle={subtitle}
+      reminderText={reminderText}
+      onPress={() => router.push(`/habit/${habit.id}`)}
+    />
   );
 }
 
@@ -108,9 +107,6 @@ const styles = StyleSheet.create({
   summaryTitle: { ...typography.body, fontWeight: "700" },
   summaryCount: { ...typography.body, color: colors.accentPink, fontWeight: "700" },
   summaryCaption: { ...typography.caption },
-  habitName: { ...typography.body, fontWeight: "700", marginBottom: 2 },
-  habitSubtitle: { ...typography.caption },
-  habitReminder: { ...typography.caption, color: colors.softAccent, marginTop: 2 },
   emptyTitle: { ...typography.body, fontWeight: "700", marginBottom: 4 },
   emptyBody: { ...typography.caption },
   fab: {
