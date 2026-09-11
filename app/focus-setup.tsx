@@ -5,7 +5,6 @@ import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet,
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { useDraftStore } from "../lib/draftStore";
-import { saveFocusAreas } from "../lib/focus";
 import { useStore } from "../lib/store";
 import { colors, spacing, typography } from "../lib/theme";
 
@@ -102,38 +101,48 @@ function useIconEntrance() {
 }
 
 export default function FocusSetupScreen() {
-  const [selected, setSelected] = useState<string[]>([]);
   const { badRotate, colorByArea, pulseByArea, introDone, continueOpacity } = useIconEntrance();
   const resetDraft = useDraftStore((s) => s.reset);
   const setDraft = useDraftStore((s) => s.set);
   const habits = useStore((s) => s.habits);
-  // Good/bad chips mark themselves selected once the user has actually
-  // finished creating a habit of that kind - not just visited the templates.
-  const hasGoodHabit = habits.some((h) => h.kind === "good");
-  const hasQuitHabit = habits.some((h) => h.kind === "quit");
+  // Chips with real templates mark themselves selected once the user has
+  // actually finished creating a habit in that category - not just visited
+  // the templates. Fitness and Projects share kind "good" with Build-good-
+  // habits, so category (not kind) is the discriminator for all three.
+  const hasGoodHabit = habits.some((h) => h.category === "good");
+  const hasQuitHabit = habits.some((h) => h.category === "quit");
+  const hasStudyHabit = habits.some((h) => h.category === "study");
+  const hasFitnessHabit = habits.some((h) => h.category === "personal_goal");
+  const hasProjectHabit = habits.some((h) => h.category === "achiever");
 
-  const toggle = (id: string) => {
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const TEMPLATE_ROUTES: Record<string, { kind: "good" | "quit"; route: string }> = {
+    good: { kind: "good", route: "/habit/good-templates" },
+    bad: { kind: "quit", route: "/habit/quit-templates" },
+    study: { kind: "good", route: "/habit/study-templates" },
+    personal_goal: { kind: "good", route: "/habit/fitness-templates" },
+    achiever: { kind: "good", route: "/habit/project-templates" },
   };
 
-  // "Track bad habits" / "Build good habits" skip the preference toggle
-  // entirely and jump straight into that category's real templates, so the
-  // user sees the concrete presets (smoking/alcohol/pan masala, water/read/
-  // move, etc.) rather than just recording an abstract preference.
-  const openTemplates = (kind: "good" | "quit") => {
-    resetDraft();
-    setDraft({ kind, category: kind });
-    router.push(kind === "good" ? "/habit/good-templates" : "/habit/quit-templates");
+  const hasHabitByArea: Record<string, boolean> = {
+    good: hasGoodHabit,
+    bad: hasQuitHabit,
+    study: hasStudyHabit,
+    personal_goal: hasFitnessHabit,
+    achiever: hasProjectHabit,
   };
 
+  // Every chip jumps straight into that category's real presets, so the user
+  // sees concrete options (smoking/alcohol/pan masala, water/read/move,
+  // practice problems/flashcards, medication/stretch, project/skill work,
+  // etc.) rather than just recording an abstract preference.
   const handlePress = (id: string) => {
-    if (id === "good") return openTemplates("good");
-    if (id === "bad") return openTemplates("quit");
-    toggle(id);
+    const target = TEMPLATE_ROUTES[id];
+    resetDraft();
+    setDraft({ kind: target.kind, category: id === "bad" ? "quit" : id });
+    router.push(target.route as never);
   };
 
-  const finish = async () => {
-    await saveFocusAreas(selected);
+  const finish = () => {
     router.replace("/(tabs)");
   };
 
@@ -141,12 +150,11 @@ export default function FocusSetupScreen() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>What would you like to focus on?</Text>
-        <Text style={styles.subtitle}>Pick as many as you like. You can change this later.</Text>
+        <Text style={styles.subtitle}>Pick one to jump straight into its presets.</Text>
 
         <View style={styles.chipRow}>
           {FOCUS_AREAS.map((area) => {
-            const active =
-              area.id === "good" ? hasGoodHabit : area.id === "bad" ? hasQuitHabit : selected.includes(area.id);
+            const active = hasHabitByArea[area.id];
             const colorProgress = colorByArea[area.id];
             const badgeBg = colorProgress.interpolate({ inputRange: [0, 1], outputRange: [GREY_TINT_BG, area.tintBg] });
             const grayIconOpacity = colorProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
