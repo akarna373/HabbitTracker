@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { useDraftStore } from "../lib/draftStore";
 import { saveFocusAreas } from "../lib/focus";
+import { useStore } from "../lib/store";
 import { colors, spacing, typography } from "../lib/theme";
 
 // All five chips render fully visible immediately. After a 2s pause, "bad
@@ -105,6 +106,11 @@ export default function FocusSetupScreen() {
   const { badRotate, colorByArea, pulseByArea, introDone, continueOpacity } = useIconEntrance();
   const resetDraft = useDraftStore((s) => s.reset);
   const setDraft = useDraftStore((s) => s.set);
+  const habits = useStore((s) => s.habits);
+  // Good/bad chips mark themselves selected once the user has actually
+  // finished creating a habit of that kind - not just visited the templates.
+  const hasGoodHabit = habits.some((h) => h.kind === "good");
+  const hasQuitHabit = habits.some((h) => h.kind === "quit");
 
   const toggle = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -139,7 +145,8 @@ export default function FocusSetupScreen() {
 
         <View style={styles.chipRow}>
           {FOCUS_AREAS.map((area) => {
-            const active = selected.includes(area.id);
+            const active =
+              area.id === "good" ? hasGoodHabit : area.id === "bad" ? hasQuitHabit : selected.includes(area.id);
             const colorProgress = colorByArea[area.id];
             const badgeBg = colorProgress.interpolate({ inputRange: [0, 1], outputRange: [GREY_TINT_BG, area.tintBg] });
             const grayIconOpacity = colorProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });

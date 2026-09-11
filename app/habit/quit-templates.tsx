@@ -6,11 +6,16 @@ import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenHeader } from "../../components/ScreenHeader";
 import { TemplateIcon } from "../../components/TemplateIcon";
 import { useDraftStore } from "../../lib/draftStore";
+import { useStore } from "../../lib/store";
 import { CUSTOM_QUIT_TEMPLATE_ID, QUIT_TEMPLATES } from "../../lib/templates";
 import { colors, spacing, typography } from "../../lib/theme";
 
 export default function QuitTemplatesScreen() {
   const set = useDraftStore((s) => s.set);
+  const habits = useStore((s) => s.habits);
+  // Avoid duplicates: a template already used for an existing quit habit
+  // can't be picked again.
+  const usedTemplateIds = new Set(habits.filter((h) => h.kind === "quit").map((h) => h.templateId));
 
   const chooseTemplate = (templateId: string) => {
     const template = QUIT_TEMPLATES.find((t) => t.id === templateId);
@@ -50,15 +55,20 @@ export default function QuitTemplatesScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScreenHeader title="Quit a bad habit" subtitle="Choose a starting point without judgment." />
       <ScrollView contentContainerStyle={styles.content}>
-        {QUIT_TEMPLATES.map((t) => (
-          <ListRow
-            key={t.id}
-            title={t.name}
-            subtitle={t.description}
-            icon={<TemplateIcon set={t.iconSet} name={t.icon} />}
-            onPress={() => chooseTemplate(t.id)}
-          />
-        ))}
+        {QUIT_TEMPLATES.map((t) => {
+          const alreadyAdded = usedTemplateIds.has(t.id);
+          return (
+            <ListRow
+              key={t.id}
+              title={t.name}
+              subtitle={alreadyAdded ? "Already tracking this" : t.description}
+              icon={<TemplateIcon set={t.iconSet} name={t.icon} />}
+              disabled={alreadyAdded}
+              showChevron={!alreadyAdded}
+              onPress={alreadyAdded ? undefined : () => chooseTemplate(t.id)}
+            />
+          );
+        })}
         <PrimaryButton title="Create a custom quit habit" variant="outline" onPress={chooseCustom} />
         <Pressable style={styles.skip} onPress={() => router.back()} hitSlop={8}>
           <Text style={styles.skipText}>None of these — skip for now</Text>
