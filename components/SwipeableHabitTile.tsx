@@ -35,6 +35,7 @@ interface Props {
 export function SwipeableHabitTile({ habit, done, subtitle, reminderText, onPress }: Props) {
   const deleteHabit = useStore((s) => s.deleteHabit);
   const archiveHabit = useStore((s) => s.archiveHabit);
+  const swipeSettings = useStore((s) => s.swipeSettings);
   const ref = useRef<Swipeable>(null);
 
   useEffect(() => {
@@ -61,6 +62,21 @@ export function SwipeableHabitTile({ habit, done, subtitle, reminderText, onPres
     archiveHabit(habit.id);
   };
 
+  const tile = (
+    <Card onPress={onPress} highlighted={done} style={styles.card}>
+      <Text style={styles.habitName}>{habit.name}</Text>
+      <Text style={styles.habitSubtitle}>{subtitle}</Text>
+      {reminderText ? <Text style={styles.habitReminder}>{reminderText}</Text> : null}
+    </Card>
+  );
+
+  // Swipe Control (Settings) can turn either action off - skip the
+  // Swipeable wrapper entirely once both are off, so the tile behaves
+  // like a plain, non-swipeable card.
+  if (!swipeSettings.archiveEnabled && !swipeSettings.deleteEnabled) {
+    return tile;
+  }
+
   return (
     <Swipeable
       ref={ref}
@@ -77,30 +93,34 @@ export function SwipeableHabitTile({ habit, done, subtitle, reminderText, onPres
       onSwipeableClose={() => {
         if (openSwipeable === ref.current) openSwipeable = null;
       }}
-      renderLeftActions={() => (
-        <ActionButton
-          side="left"
-          colorsRange={["#6FA8FF", "#0D4F9E"]}
-          icon="archive"
-          label="Archive"
-          onPress={runArchive}
-        />
-      )}
-      renderRightActions={() => (
-        <ActionButton
-          side="right"
-          colorsRange={["#FF8A93", "#B3202A"]}
-          icon="trash"
-          label="Delete"
-          onPress={confirmDelete}
-        />
-      )}
+      renderLeftActions={
+        swipeSettings.archiveEnabled
+          ? () => (
+              <ActionButton
+                side="left"
+                colorsRange={["#6FA8FF", "#0D4F9E"]}
+                icon="archive"
+                label="Archive"
+                onPress={runArchive}
+              />
+            )
+          : undefined
+      }
+      renderRightActions={
+        swipeSettings.deleteEnabled
+          ? () => (
+              <ActionButton
+                side="right"
+                colorsRange={["#FF8A93", "#B3202A"]}
+                icon="trash"
+                label="Delete"
+                onPress={confirmDelete}
+              />
+            )
+          : undefined
+      }
     >
-      <Card onPress={onPress} highlighted={done} style={styles.card}>
-        <Text style={styles.habitName}>{habit.name}</Text>
-        <Text style={styles.habitSubtitle}>{subtitle}</Text>
-        {reminderText ? <Text style={styles.habitReminder}>{reminderText}</Text> : null}
-      </Card>
+      {tile}
     </Swipeable>
   );
 }

@@ -19,6 +19,7 @@ export default function HabitDetailScreen() {
   const logs = useStore((s) => s.logsByHabit[id ?? ""]);
   const incrementAmount = useStore((s) => s.incrementAmount);
   const toggleMicrotask = useStore((s) => s.toggleMicrotask);
+  const deleteMicrotask = useStore((s) => s.deleteMicrotask);
   const saveReflection = useStore((s) => s.saveReflection);
   const deleteHabit = useStore((s) => s.deleteHabit);
 
@@ -52,6 +53,13 @@ export default function HabitDetailScreen() {
           router.back();
         },
       },
+    ]);
+  };
+
+  const confirmDeleteMicrotask = (microtaskId: string, text: string) => {
+    Alert.alert("Delete microtask?", `Remove "${text}" from this habit's steps.`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => deleteMicrotask(habit.id, microtaskId) },
     ]);
   };
 
@@ -90,7 +98,11 @@ export default function HabitDetailScreen() {
             <Card>
               <Text style={styles.cardTitle}>When an urge appears</Text>
               {microtasks.map((m) => (
-                <Text key={m.id} style={styles.cardBody}>
+                <Text
+                  key={m.id}
+                  style={styles.cardBody}
+                  onLongPress={() => confirmDeleteMicrotask(m.id, m.text)}
+                >
                   {m.text}
                 </Text>
               ))}
@@ -147,6 +159,7 @@ export default function HabitDetailScreen() {
                   key={m.id}
                   style={styles.microtask}
                   onPress={() => toggleMicrotask(habit.id, today, m.id)}
+                  onLongPress={() => confirmDeleteMicrotask(m.id, m.text)}
                 >
                   {done ? "[x] " : "[ ] "}
                   {m.text}

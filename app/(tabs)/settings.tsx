@@ -8,10 +8,11 @@ import { colors, spacing, typography } from "../../lib/theme";
 
 export default function SettingsScreen() {
   const habits = useStore((s) => s.habits);
+  const archivedHabits = useStore((s) => s.archivedHabits);
   const deleteHabit = useStore((s) => s.deleteHabit);
 
   const confirmClearAll = () => {
-    if (!habits.length) {
+    if (!habits.length && !archivedHabits.length) {
       Alert.alert("Nothing to clear", "You don't have any habits yet.");
       return;
     }
@@ -24,7 +25,7 @@ export default function SettingsScreen() {
           text: "Delete everything",
           style: "destructive",
           onPress: async () => {
-            for (const habit of habits) {
+            for (const habit of [...habits, ...archivedHabits]) {
               await deleteHabit(habit.id);
             }
           },
@@ -44,6 +45,16 @@ export default function SettingsScreen() {
         <ListRow title="Language" subtitle="System language - multilingual ready" showChevron={false} />
         <ListRow title="Partner sharing" subtitle="Off - coming in a future release" disabled showChevron={false} />
         <ListRow title="Health Connect" subtitle="Not connected - coming in a future release" disabled showChevron={false} />
+        <ListRow
+          title="Archived habits"
+          subtitle={archivedHabits.length ? `${archivedHabits.length} archived` : "None archived yet"}
+          onPress={() => router.push("/archived-habits")}
+        />
+        <ListRow
+          title="Swipe Control"
+          subtitle="Enable or disable swipe-to-delete and swipe-to-archive"
+          onPress={() => router.push("/swipe-control")}
+        />
         <ListRow title="Privacy and data" subtitle="Delete all habits and history from this device" onPress={confirmClearAll} />
         <ListRow
           title="Replay welcome screen"

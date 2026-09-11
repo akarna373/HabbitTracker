@@ -3,6 +3,7 @@ import { getDb } from "./db";
 import { genId } from "./id";
 import { todayISO } from "./dates";
 import { cancelNotification, scheduleDailyNotification } from "./notifications";
+import { getSwipeSettings, saveSwipeSettings, type SwipeSettings } from "./swipeSettings";
 import type { DailyLog, Habit, Microtask, NewHabitDraft } from "./types";
 
 interface HabitRow {
@@ -59,14 +60,19 @@ function rowToLog(row: LogRow): DailyLog {
 interface StoreState {
   ready: boolean;
   habits: Habit[];
+  archivedHabits: Habit[];
   microtasksByHabit: Record<string, Microtask[]>;
   logsByHabit: Record<string, DailyLog[]>;
+  swipeSettings: SwipeSettings;
+  setSwipeSettings: (settings: Partial<SwipeSettings>) => Promise<void>;
   init: () => Promise<void>;
   createHabit: (draft: NewHabitDraft) => Promise<string>;
   deleteHabit: (habitId: string) => Promise<void>;
   archiveHabit: (habitId: string) => Promise<void>;
+  restoreHabit: (habitId: string) => Promise<void>;
   incrementAmount: (habitId: string, date: string, delta: number) => Promise<void>;
   toggleMicrotask: (habitId: string, date: string, microtaskId: string) => Promise<void>;
+  deleteMicrotask: (habitId: string, microtaskId: string) => Promise<void>;
   saveReflection: (habitId: string, date: string, text: string) => Promise<void>;
   setReminder: (habitId: string, enabled: boolean, time: string | null) => Promise<void>;
 }
@@ -74,15 +80,29 @@ interface StoreState {
 export const useStore = create<StoreState>((set, get) => ({
   ready: false,
   habits: [],
+  archivedHabits: [],
   microtasksByHabit: {},
   logsByHabit: {},
+  swipeSettings: { deleteEnabled: true, archiveEnabled: true },
+
+  setSwipeSettings: async (partial) => {
+    const next = { ...get().swipeSettings, ...partial };
+    await saveSwipeSettings(next);
+    set({ swipeSettings: next });
+  },
 
   init: async () => {
     const db = await getDb();
+    const swipeSettings = await getSwipeSettings();
     const habitRows = await db.getAllAsync<HabitRow>(
       "SELECT * FROM habits WHERE archivedAt IS NULL ORDER BY createdAt ASC"
     );
     const habits = habitRows.map(rowToHabit);
+
+    const archivedRows = await db.getAllAsync<HabitRow>(
+      "SELECT * FROM habits WHERE archivedAt IS NOT NULL ORDER BY archivedAt DESC"
+    );
+    const archivedHabits = archivedRows.map(rowToHabit);
 
     const microtaskRows = await db.getAllAsync<Microtask>(
       "SELECT * FROM microtasks ORDER BY sortOrder ASC"
@@ -98,7 +118,7 @@ export const useStore = create<StoreState>((set, get) => ({
       (logsByHabit[row.habitId] ??= []).push(rowToLog(row));
     }
 
-    set({ ready: true, habits, microtasksByHabit, logsByHabit });
+    set({ ready: true, habits, archivedHabits, microtasksByHabit, logsByHabit, swipeSettings });
   },
 
   createHabit: async (draft) => {
@@ -204,7 +224,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
   deleteHabit: async (habitId) => {
     const db = await getDb();
-    const habit = get().habits.find((h) => h.id === habitId);
+    const habit = get().habits.find((h) => h.id === habitId) ?? get().archivedHabits.find((h) => h.id === habitId);
     if (habit) {
       await cancelNotification(habit.reminderNotificationId);
       await cancelNotification(habit.summaryNotificationId);
@@ -218,6 +238,7 @@ export const useStore = create<StoreState>((set, get) => ({
       const { [habitId]: _l, ...restLogs } = s.logsByHabit;
       return {
         habits: s.habits.filter((h) => h.id !== habitId),
+        archivedHabits: s.archivedHabits.filter((h) => h.id !== habitId),
         microtasksByHabit: restMicrotasks,
         logsByHabit: restLogs,
       };
@@ -236,7 +257,27 @@ export const useStore = create<StoreState>((set, get) => ({
 
     // Microtasks and daily_logs rows stay in the database untouched - archiving
     // only hides the habit from active lists, it never deletes its history.
-    set((s) => ({ habits: s.habits.filter((h) => h.id !== habitId) }));
+    set((s) => {
+      if (!habit) return { habits: s.habits.filter((h) => h.id !== habitId) };
+      return {
+        habits: s.habits.filter((h) => h.id !== habitId),
+        archivedHabits: [{ ...habit, archivedAt: now }, ...s.archivedHabits],
+      };
+    });
+  },
+
+  restoreHabit: async (habitId) => {
+    const db = await getDb();
+    const habit = get().archivedHabits.find((h) => h.id === habitId);
+    await db.runAsync("UPDATE habits SET archivedAt = NULL WHERE id = ?", [habitId]);
+
+    set((s) => {
+      if (!habit) return { archivedHabits: s.archivedHabits.filter((h) => h.id !== habitId) };
+      return {
+        archivedHabits: s.archivedHabits.filter((h) => h.id !== habitId),
+        habits: [...s.habits, { ...habit, archivedAt: null }],
+      };
+    });
   },
 
   incrementAmount: async (habitId, date, delta) => {
@@ -291,6 +332,18 @@ export const useStore = create<StoreState>((set, get) => ({
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
+  },
+
+  deleteMicrotask: async (habitId, microtaskId) => {
+    const db = await getDb();
+    await db.runAsync("DELETE FROM microtasks WHERE id = ?", [microtaskId]);
+
+    set((s) => ({
+      microtasksByHabit: {
+        ...s.microtasksByHabit,
+        [habitId]: (s.microtasksByHabit[habitId] ?? []).filter((m) => m.id !== microtaskId),
+      },
+    }));
   },
 
   saveReflection: async (habitId, date, text) => {
