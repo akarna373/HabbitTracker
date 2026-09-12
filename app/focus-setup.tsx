@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.lg },
   title: { ...typography.title, marginBottom: spacing.xs },
-  subtitle: { ...typography.caption, marginBottom: spacing.lg },
+  subtitle: { fontSize: 15, color: colors.textSecondary, marginBottom: spacing.lg },
   // Extra gap so two adjacent selected chips (scaled up via chipSelected)
   // don't visually overlap - scale grows a chip beyond its own layout box.
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
