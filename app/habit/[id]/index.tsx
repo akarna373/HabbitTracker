@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../../components/Card";
+import { confirmDialog } from "../../../components/ConfirmDialog";
 import { Counter } from "../../../components/Counter";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { ProgressBar } from "../../../components/ProgressBar";
@@ -43,7 +44,7 @@ export default function HabitDetailScreen() {
   const streak = computeStreak(habit, logs);
 
   const confirmDelete = () => {
-    Alert.alert("Delete habit?", `This removes "${habit.name}" and its history.`, [
+    confirmDialog("Delete habit?", `This removes "${habit.name}" and its history.`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -57,7 +58,7 @@ export default function HabitDetailScreen() {
   };
 
   const confirmDeleteMicrotask = (microtaskId: string, text: string) => {
-    Alert.alert("Delete microtask?", `Remove "${text}" from this habit's steps.`, [
+    confirmDialog("Delete microtask?", `Remove "${text}" from this habit's steps.`, [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: () => deleteMicrotask(habit.id, microtaskId) },
     ]);

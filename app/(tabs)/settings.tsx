@@ -1,6 +1,7 @@
 import { router } from "expo-router";
-import { Alert, ScrollView, StyleSheet, Text } from "react-native";
+import { ScrollView, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { confirmDialog } from "../../components/ConfirmDialog";
 import { ListRow } from "../../components/ListRow";
 import { resetOnboarding } from "../../lib/onboarding";
 import { useStore } from "../../lib/store";
@@ -13,10 +14,10 @@ export default function SettingsScreen() {
 
   const confirmClearAll = () => {
     if (!habits.length && !archivedHabits.length) {
-      Alert.alert("Nothing to clear", "You don't have any habits yet.");
+      confirmDialog("Nothing to clear", "You don't have any habits yet.");
       return;
     }
-    Alert.alert(
+    confirmDialog(
       "Delete all data?",
       "This removes every habit and its history from this device. This cannot be undone.",
       [

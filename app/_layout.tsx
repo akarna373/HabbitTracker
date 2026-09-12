@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { colors } from "../lib/theme";
 import { useStore } from "../lib/store";
 import { hasSeenOnboarding } from "../lib/onboarding";
+import { ConfirmDialogHost } from "../components/ConfirmDialog";
 
 export default function RootLayout() {
   const ready = useStore((s) => s.ready);
@@ -44,6 +45,7 @@ export default function RootLayout() {
           <Stack.Screen name="profile-setup" />
           <Stack.Screen name="focus-setup" />
         </Stack>
+        <ConfirmDialogHost />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -1,6 +1,7 @@
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../components/Card";
+import { confirmDialog } from "../components/ConfirmDialog";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { formatLongDate } from "../lib/dates";
 import { useStore } from "../lib/store";
@@ -13,7 +14,7 @@ export default function ArchivedHabitsScreen() {
   const deleteHabit = useStore((s) => s.deleteHabit);
 
   const confirmDelete = (habit: Habit) => {
-    Alert.alert("Delete forever?", `This permanently removes "${habit.name}" and its history. This cannot be undone.`, [
+    confirmDialog("Delete forever?", `This permanently removes "${habit.name}" and its history. This cannot be undone.`, [
       { text: "Cancel", style: "cancel" },
       { text: "Delete forever", style: "destructive", onPress: () => deleteHabit(habit.id) },
     ]);
