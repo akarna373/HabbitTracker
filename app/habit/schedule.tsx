@@ -1,10 +1,13 @@
 import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenHeader } from "../../components/ScreenHeader";
+import { ThemedTimePicker } from "../../components/ThemedTimePicker";
 import { useDraftStore } from "../../lib/draftStore";
+import { formatTime12h } from "../../lib/progress";
 import { colors, spacing, typography } from "../../lib/theme";
 
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -13,6 +16,7 @@ const WEEKDAYS = [0, 1, 2, 3, 4];
 
 export default function ScheduleScreen() {
   const draft = useDraftStore();
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const toggleDay = (day: number) => {
     const has = draft.repeatDays.includes(day);
@@ -72,16 +76,20 @@ export default function ScheduleScreen() {
 
         {draft.reminderEnabled ? (
           <>
-            <Text style={styles.label}>REMINDER TIME (24h, HH:mm)</Text>
-            <Card>
-              <TextInput
-                style={styles.input}
-                placeholder="20:30"
-                placeholderTextColor={colors.textMuted}
-                value={draft.reminderTime ?? ""}
-                onChangeText={(t) => draft.set({ reminderTime: t })}
-              />
+            <Text style={styles.label}>REMINDER TIME</Text>
+            <Card onPress={() => setShowTimePicker(true)}>
+              <Text style={styles.input}>{formatTime12h(draft.reminderTime ?? "20:30")}</Text>
             </Card>
+            <ThemedTimePicker
+              visible={showTimePicker}
+              value={draft.reminderTime ?? "20:30"}
+              title="Reminder time"
+              onCancel={() => setShowTimePicker(false)}
+              onConfirm={(time) => {
+                setShowTimePicker(false);
+                draft.set({ reminderTime: time });
+              }}
+            />
           </>
         ) : null}
 

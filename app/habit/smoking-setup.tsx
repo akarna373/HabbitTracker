@@ -1,10 +1,14 @@
 import { router } from "expo-router";
+import { useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenHeader } from "../../components/ScreenHeader";
+import { ThemedTimePicker } from "../../components/ThemedTimePicker";
+import { getCurrencySymbol } from "../../lib/currency";
 import { useDraftStore } from "../../lib/draftStore";
+import { formatTime12h } from "../../lib/progress";
 import { colors, spacing, typography } from "../../lib/theme";
 import type { GoalType } from "../../lib/types";
 
@@ -16,6 +20,7 @@ const GOALS: { id: GoalType; label: string }[] = [
 
 export default function SmokingSetupScreen() {
   const draft = useDraftStore();
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const canContinue =
     draft.baselineQuantity !== null && draft.baselineQuantity >= 0 && draft.pricePerItem !== null && draft.pricePerItem >= 0;
@@ -39,7 +44,7 @@ export default function SmokingSetupScreen() {
           />
         </Card>
 
-        <Text style={styles.label}>PRICE PER ITEM (Rs)</Text>
+        <Text style={styles.label}>PRICE PER ITEM ({getCurrencySymbol()})</Text>
         <Card>
           <TextInput
             style={styles.input}
@@ -61,16 +66,20 @@ export default function SmokingSetupScreen() {
           </Card>
         ))}
 
-        <Text style={styles.label}>NIGHT SUMMARY TIME (24h, HH:mm)</Text>
-        <Card>
-          <TextInput
-            style={styles.input}
-            placeholder="22:00"
-            placeholderTextColor={colors.textMuted}
-            value={draft.summaryTime ?? ""}
-            onChangeText={(t) => draft.set({ summaryTime: t })}
-          />
+        <Text style={styles.label}>NIGHT SUMMARY TIME</Text>
+        <Card onPress={() => setShowTimePicker(true)}>
+          <Text style={styles.input}>{formatTime12h(draft.summaryTime ?? "22:00")}</Text>
         </Card>
+        <ThemedTimePicker
+          visible={showTimePicker}
+          value={draft.summaryTime ?? "22:00"}
+          title="Night summary time"
+          onCancel={() => setShowTimePicker(false)}
+          onConfirm={(time) => {
+            setShowTimePicker(false);
+            draft.set({ summaryTime: time });
+          }}
+        />
 
         <View style={{ height: spacing.md }} />
         <PrimaryButton
