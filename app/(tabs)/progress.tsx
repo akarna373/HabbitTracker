@@ -1,6 +1,7 @@
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
+import { formatMoney } from "../../lib/currency";
 import { weekdayLetter } from "../../lib/dates";
 import {
   computeStreak,
@@ -85,7 +86,7 @@ function HabitProgressCard({ habit }: { habit: Habit }) {
       <Card>
         <Text style={styles.habitName}>{habit.name}</Text>
         <Text style={styles.cardBody}>{smokeFreeDays} smoke-free days</Text>
-        <Text style={styles.cardCaption}>Rs {savings.toFixed(0)} estimated savings</Text>
+        <Text style={styles.cardCaption}>{formatMoney(savings)} estimated savings</Text>
       </Card>
     );
   }

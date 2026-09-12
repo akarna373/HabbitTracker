@@ -8,6 +8,7 @@ import { Counter } from "../../../components/Counter";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { ProgressBar } from "../../../components/ProgressBar";
 import { ScreenHeader } from "../../../components/ScreenHeader";
+import { formatMoney } from "../../../lib/currency";
 import { todayISO } from "../../../lib/dates";
 import { baselineCost, computeStreak, costForAmount } from "../../../lib/progress";
 import { selectLogForDate, useStore } from "../../../lib/store";
@@ -88,10 +89,10 @@ export default function HabitDetailScreen() {
           <Card highlighted>
             <Text style={styles.cardTitle}>Today's spending</Text>
             <Text style={styles.cardBody}>
-              {amount} x Rs {habit.pricePerItem ?? 0} = Rs {cost.toFixed(0)}
+              {amount} x {formatMoney(habit.pricePerItem ?? 0)} = {formatMoney(cost)}
             </Text>
             <Text style={styles.cardCaption}>
-              {diff >= 0 ? `Rs ${diff.toFixed(0)} less than baseline` : `Rs ${Math.abs(diff).toFixed(0)} more than baseline`}
+              {diff >= 0 ? `${formatMoney(diff)} less than baseline` : `${formatMoney(Math.abs(diff))} more than baseline`}
             </Text>
           </Card>
 

@@ -46,7 +46,8 @@
             "backgroundColor": "#0A0E1C"
           }
         }
-      ]
+      ],
+      "expo-localization"
     ]
   }
 }

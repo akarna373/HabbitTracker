@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../../components/Card";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { ScreenHeader } from "../../../components/ScreenHeader";
+import { formatMoney } from "../../../lib/currency";
 import { addDays, todayISO } from "../../../lib/dates";
 import { baselineCost, costForAmount, estimatedSavingsThisWeek, smokeFreeDaysThisWeek } from "../../../lib/progress";
 import { selectLogForDate, useStore } from "../../../lib/store";
@@ -53,18 +54,18 @@ export default function SmokingSummaryScreen() {
 
         <Card>
           <Text style={styles.cardTitle}>Today's spending</Text>
-          <Text style={styles.cardBody}>Rs {cost.toFixed(0)} spent</Text>
+          <Text style={styles.cardBody}>{formatMoney(cost)} spent</Text>
           <Text style={styles.cardCaption}>
             {diffFromBaseline >= 0
-              ? `Rs ${diffFromBaseline.toFixed(0)} below your daily baseline`
-              : `Rs ${Math.abs(diffFromBaseline).toFixed(0)} above your daily baseline`}
+              ? `${formatMoney(diffFromBaseline)} below your daily baseline`
+              : `${formatMoney(Math.abs(diffFromBaseline))} above your daily baseline`}
           </Text>
         </Card>
 
         <Card>
           <Text style={styles.cardTitle}>This week</Text>
           <Text style={styles.cardBody}>{smokeFreeDays} smoke-free days</Text>
-          <Text style={styles.cardCaption}>Rs {savings.toFixed(0)} estimated savings</Text>
+          <Text style={styles.cardCaption}>{formatMoney(savings)} estimated savings</Text>
         </Card>
 
         <Card>
