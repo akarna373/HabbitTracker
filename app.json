@@ -47,7 +47,8 @@
           }
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-location"
     ]
   }
 }

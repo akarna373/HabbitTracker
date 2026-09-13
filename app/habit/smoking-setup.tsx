@@ -34,7 +34,7 @@ export default function SmokingSetupScreen() {
           <TextInput
             style={styles.input}
             keyboardType="numeric"
-            placeholder="e.g. 5"
+            placeholder={`e.g. ${draft.suggestedBaselineQuantity ?? 5}`}
             placeholderTextColor={colors.textMuted}
             value={draft.baselineQuantity !== null ? String(draft.baselineQuantity) : ""}
             onChangeText={(t) => {
@@ -49,7 +49,7 @@ export default function SmokingSetupScreen() {
           <TextInput
             style={styles.input}
             keyboardType="numeric"
-            placeholder="e.g. 20"
+            placeholder={`e.g. ${draft.suggestedPricePerItem ?? 20}`}
             placeholderTextColor={colors.textMuted}
             value={draft.pricePerItem !== null ? String(draft.pricePerItem) : ""}
             onChangeText={(t) => {

@@ -2,13 +2,14 @@ import { router } from "expo-router";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
+import { HeaderMenu } from "../../components/HeaderMenu";
 import { ProfileBadge } from "../../components/ProfileBadge";
 import { ProgressBar } from "../../components/ProgressBar";
 import { SwipeableHabitTile } from "../../components/SwipeableHabitTile";
 import { formatLongDate, todayISO } from "../../lib/dates";
 import { formatTime12h, isHabitCompleteOn } from "../../lib/progress";
 import { useStore } from "../../lib/store";
-import { colors, spacing, typography } from "../../lib/theme";
+import { brandFont, colors, spacing, typography } from "../../lib/theme";
 import type { DailyLog, Habit } from "../../lib/types";
 
 export default function TodayScreen() {
@@ -26,13 +27,16 @@ export default function TodayScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View>
-            <View style={styles.headerRow}>
-              <View style={styles.headerTextCol}>
-                <Text style={styles.title}>A little better, daily.</Text>
-                <Text style={styles.date}>{formatLongDate(today)}</Text>
+            <View style={styles.brandRow}>
+              <Text style={styles.brandText}>Habbit</Text>
+              <View style={styles.brandActions}>
+                <ProfileBadge />
+                <HeaderMenu />
               </View>
-              <ProfileBadge />
             </View>
+
+            <Text style={styles.title}>A little better, daily.</Text>
+            <Text style={styles.date}>{formatLongDate(today)}</Text>
 
             <Card highlighted>
               <View style={styles.summaryRow}>
@@ -94,14 +98,16 @@ function TodayHabitTile({ habit, logs, today }: { habit: Habit; logs: DailyLog[]
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   listContent: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
-  headerRow: {
+  brandRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
     marginTop: spacing.md,
+    marginBottom: spacing.md,
   },
-  headerTextCol: { flexShrink: 1, paddingRight: spacing.sm },
-  title: { ...typography.title },
+  brandText: { ...brandFont, fontSize: 34 },
+  brandActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  title: { ...typography.title, fontSize: 20 },
   date: { ...typography.caption, marginBottom: spacing.md },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   summaryTitle: { ...typography.body, fontWeight: "700" },

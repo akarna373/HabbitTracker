@@ -2,9 +2,11 @@ import { create } from "zustand";
 import { getDb } from "./db";
 import { genId } from "./id";
 import { todayISO } from "./dates";
-import { cancelNotification, scheduleDailyNotification } from "./notifications";
+import { getCurrentLocation } from "./location";
+import { cancelNotification, computeNextOccurrence, scheduleDailyNotification, scheduleOneTimeNotification } from "./notifications";
+import { reduceCycleDay, reduceDailyTarget, REDUCE_CYCLE_DAYS } from "./progress";
 import { getSwipeSettings, saveSwipeSettings, type SwipeSettings } from "./swipeSettings";
-import type { DailyLog, Habit, Microtask, NewHabitDraft } from "./types";
+import type { DailyLog, Habit, Microtask, NewHabitDraft, SmokeLocation } from "./types";
 
 interface HabitRow {
   id: string;
@@ -27,6 +29,7 @@ interface HabitRow {
   goalType: string | null;
   summaryTime: string | null;
   summaryNotificationId: string | null;
+  locationTrackingEnabled: number;
   createdAt: string;
   archivedAt: string | null;
 }
@@ -41,6 +44,7 @@ function rowToHabit(row: HabitRow): Habit {
     repeatDays: JSON.parse(row.repeatDays),
     reminderEnabled: !!row.reminderEnabled,
     hasCost: !!row.hasCost,
+    locationTrackingEnabled: !!row.locationTrackingEnabled,
   };
 }
 
@@ -63,6 +67,7 @@ interface StoreState {
   archivedHabits: Habit[];
   microtasksByHabit: Record<string, Microtask[]>;
   logsByHabit: Record<string, DailyLog[]>;
+  smokeLocationsByHabit: Record<string, SmokeLocation[]>;
   swipeSettings: SwipeSettings;
   setSwipeSettings: (settings: Partial<SwipeSettings>) => Promise<void>;
   init: () => Promise<void>;
@@ -75,6 +80,7 @@ interface StoreState {
   deleteMicrotask: (habitId: string, microtaskId: string) => Promise<void>;
   saveReflection: (habitId: string, date: string, text: string) => Promise<void>;
   setReminder: (habitId: string, enabled: boolean, time: string | null) => Promise<void>;
+  setLocationTracking: (habitId: string, enabled: boolean) => Promise<void>;
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -83,6 +89,7 @@ export const useStore = create<StoreState>((set, get) => ({
   archivedHabits: [],
   microtasksByHabit: {},
   logsByHabit: {},
+  smokeLocationsByHabit: {},
   swipeSettings: { deleteEnabled: true, archiveEnabled: true },
 
   setSwipeSettings: async (partial) => {
@@ -118,7 +125,35 @@ export const useStore = create<StoreState>((set, get) => ({
       (logsByHabit[row.habitId] ??= []).push(rowToLog(row));
     }
 
-    set({ ready: true, habits, archivedHabits, microtasksByHabit, logsByHabit, swipeSettings });
+    const smokeLocationRows = await db.getAllAsync<SmokeLocation>("SELECT * FROM smoke_locations");
+    const smokeLocationsByHabit: Record<string, SmokeLocation[]> = {};
+    for (const row of smokeLocationRows) {
+      (smokeLocationsByHabit[row.habitId] ??= []).push(row);
+    }
+
+    // A "reduce" habit's nightly notification carries a declining target
+    // that changes day to day - a DAILY trigger can't update its own text,
+    // so re-derive and reschedule tonight's one-time notification on every
+    // app open instead (see lib/notifications.ts:scheduleOneTimeNotification).
+    const today = todayISO();
+    for (let i = 0; i < habits.length; i++) {
+      const habit = habits[i];
+      if (habit.goalType !== "reduce" || !habit.hasCost || !habit.summaryTime) continue;
+      await cancelNotification(habit.summaryNotificationId);
+      const day = reduceCycleDay(habit);
+      const target = reduceDailyTarget(habit);
+      const todayAmount = logsByHabit[habit.id]?.find((l) => l.date === today)?.amount ?? 0;
+      const title = day <= REDUCE_CYCLE_DAYS ? `Day ${day} of ${REDUCE_CYCLE_DAYS}` : "Reduction complete";
+      const body =
+        day <= REDUCE_CYCLE_DAYS
+          ? `Today's target: ${target} ${habit.unit ?? ""}. You've logged ${todayAmount} so far.`
+          : `You've reached your zero target. You've logged ${todayAmount} today.`;
+      const summaryNotificationId = await scheduleOneTimeNotification(title, body, computeNextOccurrence(habit.summaryTime));
+      await db.runAsync("UPDATE habits SET summaryNotificationId = ? WHERE id = ?", [summaryNotificationId, habit.id]);
+      habits[i] = { ...habit, summaryNotificationId };
+    }
+
+    set({ ready: true, habits, archivedHabits, microtasksByHabit, logsByHabit, smokeLocationsByHabit, swipeSettings });
   },
 
   createHabit: async (draft) => {
@@ -137,11 +172,23 @@ export const useStore = create<StoreState>((set, get) => ({
 
     let summaryNotificationId: string | null = null;
     if (draft.hasCost && draft.summaryTime) {
-      summaryNotificationId = await scheduleDailyNotification(
-        "Your 10 PM summary",
-        `See how today compared for ${draft.name}.`,
-        draft.summaryTime
-      );
+      if (draft.goalType === "reduce") {
+        // Day 1 of the reduce cycle always starts at the full baseline
+        // (day(14-1)/13 = baseline) - a one-time notification, since a
+        // DAILY trigger can't carry a target that changes as the cycle
+        // progresses (see reduceCycleDay/reduceDailyTarget in lib/progress.ts).
+        summaryNotificationId = await scheduleOneTimeNotification(
+          `Day 1 of ${REDUCE_CYCLE_DAYS}`,
+          `Today's target: ${draft.baselineQuantity ?? 0} ${draft.unit ?? ""}. You've logged 0 so far.`,
+          computeNextOccurrence(draft.summaryTime)
+        );
+      } else {
+        summaryNotificationId = await scheduleDailyNotification(
+          "Your 10 PM summary",
+          `See how today compared for ${draft.name}.`,
+          draft.summaryTime
+        );
+      }
     }
 
     await db.runAsync(
@@ -209,6 +256,7 @@ export const useStore = create<StoreState>((set, get) => ({
       goalType: draft.goalType,
       summaryTime: draft.summaryTime,
       summaryNotificationId,
+      locationTrackingEnabled: false,
       createdAt: now,
       archivedAt: null,
     };
@@ -217,6 +265,7 @@ export const useStore = create<StoreState>((set, get) => ({
       habits: [...s.habits, habit],
       microtasksByHabit: { ...s.microtasksByHabit, [id]: microtasks },
       logsByHabit: { ...s.logsByHabit, [id]: [] },
+      smokeLocationsByHabit: { ...s.smokeLocationsByHabit, [id]: [] },
     }));
 
     return id;
@@ -232,15 +281,18 @@ export const useStore = create<StoreState>((set, get) => ({
     await db.runAsync("DELETE FROM habits WHERE id = ?", [habitId]);
     await db.runAsync("DELETE FROM microtasks WHERE habitId = ?", [habitId]);
     await db.runAsync("DELETE FROM daily_logs WHERE habitId = ?", [habitId]);
+    await db.runAsync("DELETE FROM smoke_locations WHERE habitId = ?", [habitId]);
 
     set((s) => {
       const { [habitId]: _m, ...restMicrotasks } = s.microtasksByHabit;
       const { [habitId]: _l, ...restLogs } = s.logsByHabit;
+      const { [habitId]: _s, ...restSmokeLocations } = s.smokeLocationsByHabit;
       return {
         habits: s.habits.filter((h) => h.id !== habitId),
         archivedHabits: s.archivedHabits.filter((h) => h.id !== habitId),
         microtasksByHabit: restMicrotasks,
         logsByHabit: restLogs,
+        smokeLocationsByHabit: restSmokeLocations,
       };
     });
   },
@@ -303,6 +355,30 @@ export const useStore = create<StoreState>((set, get) => ({
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
+
+    // Logging a cigarette (never undoing one) on a location-tracked habit
+    // silently records where the user is - runs in the background so it
+    // never slows down the tap itself.
+    const habit = get().habits.find((h) => h.id === habitId);
+    if (delta > 0 && habit?.locationTrackingEnabled) {
+      void (async () => {
+        const point = await getCurrentLocation();
+        if (!point) return;
+        const locationId = genId();
+        const loggedAt = new Date().toISOString();
+        const location: SmokeLocation = { id: locationId, habitId, latitude: point.latitude, longitude: point.longitude, loggedAt };
+        await db.runAsync(
+          "INSERT INTO smoke_locations (id, habitId, latitude, longitude, loggedAt) VALUES (?,?,?,?,?)",
+          [location.id, location.habitId, location.latitude, location.longitude, location.loggedAt]
+        );
+        set((s) => ({
+          smokeLocationsByHabit: {
+            ...s.smokeLocationsByHabit,
+            [habitId]: [...(s.smokeLocationsByHabit[habitId] ?? []), location],
+          },
+        }));
+      })();
+    }
   },
 
   toggleMicrotask: async (habitId, date, microtaskId) => {
@@ -396,12 +472,14 @@ export const useStore = create<StoreState>((set, get) => ({
       ),
     }));
   },
+
+  setLocationTracking: async (habitId, enabled) => {
+    const db = await getDb();
+    await db.runAsync("UPDATE habits SET locationTrackingEnabled = ? WHERE id = ?", [enabled ? 1 : 0, habitId]);
+    set((s) => ({
+      habits: s.habits.map((h) => (h.id === habitId ? { ...h, locationTrackingEnabled: enabled } : h)),
+    }));
+  },
 }));
 
-export function selectLogForDate(logs: DailyLog[] | undefined, date: string): DailyLog | undefined {
-  return logs?.find((l) => l.date === date);
-}
-
-export function selectTodayLog(logs: DailyLog[] | undefined): DailyLog | undefined {
-  return selectLogForDate(logs, todayISO());
-}
+export { selectLogForDate, selectTodayLog } from "./progress";

@@ -6,7 +6,15 @@ import { PrimaryButton } from "../../../components/PrimaryButton";
 import { ScreenHeader } from "../../../components/ScreenHeader";
 import { formatMoney } from "../../../lib/currency";
 import { addDays, todayISO } from "../../../lib/dates";
-import { baselineCost, costForAmount, estimatedSavingsThisWeek, smokeFreeDaysThisWeek } from "../../../lib/progress";
+import {
+  baselineCost,
+  costForAmount,
+  estimatedSavingsThisWeek,
+  reduceCycleDay,
+  reduceDailyTarget,
+  REDUCE_CYCLE_DAYS,
+  smokeFreeDaysThisWeek,
+} from "../../../lib/progress";
 import { selectLogForDate, useStore } from "../../../lib/store";
 import { colors, spacing, typography } from "../../../lib/theme";
 
@@ -22,8 +30,13 @@ export default function SmokingSummaryScreen() {
   const todayAmount = selectLogForDate(logs, today)?.amount ?? 0;
   const yesterdayLog = selectLogForDate(logs, yesterday);
   const cost = costForAmount(habit, todayAmount);
-  const baseline = baselineCost(habit);
-  const diffFromBaseline = baseline - cost;
+  const isReduce = habit.goalType === "reduce";
+  const day = reduceCycleDay(habit);
+  // A "reduce" habit compares against that day's declining target instead
+  // of the flat baseline forever - matches app/habit/[id]/index.tsx.
+  const compareCost = isReduce ? costForAmount(habit, reduceDailyTarget(habit)) : baselineCost(habit);
+  const diffFromBaseline = compareCost - cost;
+  const compareLabel = isReduce ? "today's target" : "your daily baseline";
   const smokeFreeDays = smokeFreeDaysThisWeek(habit, logs);
   const savings = estimatedSavingsThisWeek(habit, logs);
 
@@ -43,6 +56,7 @@ export default function SmokingSummaryScreen() {
       <ScreenHeader title="Your 10 PM summary" subtitle="A factual, supportive reflection." />
       <ScrollView contentContainerStyle={styles.content}>
         <Card highlighted>
+          {isReduce ? <Text style={styles.cardCaption}>DAY {day} OF {REDUCE_CYCLE_DAYS}</Text> : null}
           <Text style={styles.cardTitle}>
             Today: {todayAmount} {habit.unit}
           </Text>
@@ -57,8 +71,8 @@ export default function SmokingSummaryScreen() {
           <Text style={styles.cardBody}>{formatMoney(cost)} spent</Text>
           <Text style={styles.cardCaption}>
             {diffFromBaseline >= 0
-              ? `${formatMoney(diffFromBaseline)} below your daily baseline`
-              : `${formatMoney(Math.abs(diffFromBaseline))} above your daily baseline`}
+              ? `${formatMoney(diffFromBaseline)} below ${compareLabel}`
+              : `${formatMoney(Math.abs(diffFromBaseline))} above ${compareLabel}`}
           </Text>
         </Card>
 

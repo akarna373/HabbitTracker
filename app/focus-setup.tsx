@@ -35,6 +35,11 @@ const FOCUS_AREAS: AreaDef[] = [
 
 const GREY_TINT_BG = "rgba(150,150,160,0.18)";
 
+// The chip reveal is a one-time first-impression flourish - once it has
+// played, bouncing back here after creating a habit (to pick another area)
+// should show every chip already revealed, not replay the whole sequence.
+let introAlreadyPlayed = false;
+
 function useIconEntrance() {
   const badShake = useRef(new Animated.Value(0)).current;
   const continueOpacity = useRef(new Animated.Value(0)).current;
@@ -50,9 +55,18 @@ function useIconEntrance() {
     let cancelled = false;
     const markIntroDone = () => {
       if (cancelled) return;
+      introAlreadyPlayed = true;
       setIntroDone(true);
       Animated.timing(continueOpacity, { toValue: 1, duration: 300, easing: Easing.out(Easing.ease), useNativeDriver: false }).start();
     };
+
+    if (introAlreadyPlayed) {
+      Object.values(colorByArea).forEach((v) => v.setValue(1));
+      continueOpacity.setValue(1);
+      setIntroDone(true);
+      return;
+    }
+
     AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
       if (cancelled) return;
       if (reduced) {
@@ -138,7 +152,7 @@ export default function FocusSetupScreen() {
   const handlePress = (id: string) => {
     const target = TEMPLATE_ROUTES[id];
     resetDraft();
-    setDraft({ kind: target.kind, category: id === "bad" ? "quit" : id });
+    setDraft({ origin: "focus_setup", kind: target.kind, category: id === "bad" ? "quit" : id });
     router.push(target.route as never);
   };
 

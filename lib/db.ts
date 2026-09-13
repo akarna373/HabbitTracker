@@ -28,6 +28,7 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
           goalType TEXT,
           summaryTime TEXT,
           summaryNotificationId TEXT,
+          locationTrackingEnabled INTEGER NOT NULL DEFAULT 0,
           createdAt TEXT NOT NULL,
           archivedAt TEXT
         );
@@ -45,6 +46,13 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
           microtasksDone TEXT NOT NULL DEFAULT '[]',
           reflection TEXT,
           UNIQUE(habitId, date)
+        );
+        CREATE TABLE IF NOT EXISTS smoke_locations (
+          id TEXT PRIMARY KEY NOT NULL,
+          habitId TEXT NOT NULL,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          loggedAt TEXT NOT NULL
         );
       `);
       return db;

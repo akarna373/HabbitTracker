@@ -53,3 +53,30 @@ export async function cancelNotification(id: string | null): Promise<void> {
   if (!Notifications || !id) return;
   await Notifications.cancelScheduledNotificationAsync(id);
 }
+
+// Today at `time` if that hasn't passed yet, otherwise tomorrow at `time`.
+export function computeNextOccurrence(time: string): Date {
+  const { hour, minute } = parseTime(time);
+  const next = new Date();
+  next.setHours(hour, minute, 0, 0);
+  if (next.getTime() <= Date.now()) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next;
+}
+
+// A DAILY trigger repeats the same fixed content forever - a habit whose
+// notification text needs to change day to day (e.g. a declining target)
+// has to be rescheduled as a fresh one-time notification instead.
+export async function scheduleOneTimeNotification(title: string, body: string, date: Date): Promise<string | null> {
+  if (!Notifications) return null;
+  const granted = await ensureNotificationPermission();
+  if (!granted) return null;
+  return Notifications.scheduleNotificationAsync({
+    content: { title, body },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date,
+    },
+  });
+}

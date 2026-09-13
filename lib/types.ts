@@ -27,8 +27,17 @@ export interface Habit {
   goalType: GoalType | null;
   summaryTime: string | null; // "HH:mm", cost-tracked quit habits only
   summaryNotificationId: string | null;
+  locationTrackingEnabled: boolean;
   createdAt: string;
   archivedAt: string | null;
+}
+
+export interface SmokeLocation {
+  id: string;
+  habitId: string;
+  latitude: number;
+  longitude: number;
+  loggedAt: string; // ISO datetime
 }
 
 export interface Microtask {

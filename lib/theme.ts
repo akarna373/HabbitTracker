@@ -25,6 +25,14 @@ export const radii = {
   chip: 20,
 };
 
+// The app's signature wordmark font (the "Habbit" logotype) - white on the
+// current dark theme; reserved for pink once a light theme exists (see
+// project_theme_deferred memory - theming waits until the app is finished).
+export const brandFont = {
+  fontFamily: "Baloo2_800ExtraBold",
+  color: colors.textPrimary,
+};
+
 export const typography = {
   title: { fontSize: 28, fontWeight: "700" as const, color: colors.textPrimary },
   screenTitle: { fontSize: 22, fontWeight: "700" as const, color: colors.textPrimary },

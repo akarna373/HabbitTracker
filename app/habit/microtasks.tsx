@@ -66,8 +66,14 @@ export default function MicrotasksScreen() {
       summaryTime: finalDraft.hasCost ? finalDraft.summaryTime : null,
       microtasks: tasks.filter((t) => t.trim().length > 0),
     });
+    const origin = finalDraft.origin;
     draft.reset();
-    router.dismissAll();
+    // dismissAll() pops to whatever sits at the bottom of the stack, which
+    // during onboarding is "welcome" or "focus-setup", not Home - replace
+    // the whole stack so creation always lands somewhere real: back to
+    // focus-setup (to pick another area) if that's where this flow started,
+    // otherwise Home.
+    router.replace(origin === "focus_setup" ? "/focus-setup" : "/(tabs)");
   };
 
   return (
@@ -110,12 +116,6 @@ export default function MicrotasksScreen() {
           {draft.hasCost && draft.summaryTime ? (
             <Text style={styles.summaryBody}>Night summary at {formatTime12h(draft.summaryTime)}</Text>
           ) : null}
-        </Card>
-
-        <Card>
-          <Text style={styles.summaryTitle}>After creation</Text>
-          <Text style={styles.summaryBody}>Return to Today</Text>
-          <Text style={styles.summaryBody}>Update total habit count immediately</Text>
         </Card>
 
         <View style={{ height: spacing.md }} />

@@ -1,3 +1,4 @@
+import { Baloo2_800ExtraBold, useFonts } from "@expo-google-fonts/baloo-2";
 import { router, Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
@@ -14,6 +15,7 @@ export default function RootLayout() {
   const init = useStore((s) => s.init);
   const [error, setError] = useState<string | null>(null);
   const [seenOnboarding, setSeenOnboarding] = useState<boolean | null>(null);
+  const [fontsLoaded] = useFonts({ Baloo2_800ExtraBold });
 
   useEffect(() => {
     init().catch((e) => setError(String(e)));
@@ -26,7 +28,7 @@ export default function RootLayout() {
     }
   }, [ready, seenOnboarding]);
 
-  if (!ready || seenOnboarding === null) {
+  if (!ready || seenOnboarding === null || !fontsLoaded) {
     return <View style={styles.loading} />;
   }
 

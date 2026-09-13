@@ -10,7 +10,11 @@ import { useDraftStore } from "../../lib/draftStore";
 import { formatTime12h } from "../../lib/progress";
 import { colors, spacing, typography } from "../../lib/theme";
 
-const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+// repeatDays stays Monday-first (0=Mon..6=Sun) to match the app-wide
+// convention (see lib/dates.ts weekdayIndexMonFirst) - only the display
+// order here starts the row on Sunday.
+const LABELS_BY_DAY = ["M", "T", "W", "T", "F", "S", "S"];
+const DISPLAY_ORDER = [6, 0, 1, 2, 3, 4, 5];
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 const WEEKDAYS = [0, 1, 2, 3, 4];
 
@@ -39,15 +43,15 @@ export default function ScheduleScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.label}>REPEAT ON</Text>
         <View style={styles.dayRow}>
-          {DAY_LABELS.map((label, index) => {
-            const active = draft.repeatDays.includes(index);
+          {DISPLAY_ORDER.map((dayIndex) => {
+            const active = draft.repeatDays.includes(dayIndex);
             return (
               <Pressable
-                key={index}
-                onPress={() => toggleDay(index)}
+                key={dayIndex}
+                onPress={() => toggleDay(dayIndex)}
                 style={[styles.dayCircle, active && styles.dayCircleActive]}
               >
-                <Text style={[styles.dayText, active && styles.dayTextActive]}>{label}</Text>
+                <Text style={[styles.dayText, active && styles.dayTextActive]}>{LABELS_BY_DAY[dayIndex]}</Text>
               </Pressable>
             );
           })}

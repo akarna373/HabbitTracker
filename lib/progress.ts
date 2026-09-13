@@ -1,6 +1,13 @@
-import { addDays, last7Days, last7DaysEndingDaysAgo, todayISO } from "./dates";
+import { addDays, daysBetween, last7Days, last7DaysEndingDaysAgo, todayISO } from "./dates";
 import type { DailyLog, Habit } from "./types";
-import { selectLogForDate } from "./store";
+
+export function selectLogForDate(logs: DailyLog[] | undefined, date: string): DailyLog | undefined {
+  return logs?.find((l) => l.date === date);
+}
+
+export function selectTodayLog(logs: DailyLog[] | undefined): DailyLog | undefined {
+  return selectLogForDate(logs, todayISO());
+}
 
 export function formatTime12h(time: string | null): string {
   if (!time) return "";
@@ -25,6 +32,23 @@ export function costForAmount(habit: Habit, amount: number): number {
 export function baselineCost(habit: Habit): number {
   if (!habit.hasCost || !habit.pricePerItem || !habit.baselineQuantity) return 0;
   return habit.baselineQuantity * habit.pricePerItem;
+}
+
+// "Reduce, then reach zero": a 14-day cycle anchored on the habit's own
+// createdAt (no extra column needed) - day 1 is creation day, the daily
+// target declines linearly to 0 by day 14, and stays at 0 after (maintenance).
+export const REDUCE_CYCLE_DAYS = 14;
+
+export function reduceCycleDay(habit: Habit): number {
+  const createdDate = habit.createdAt.slice(0, 10);
+  return daysBetween(createdDate, todayISO()) + 1;
+}
+
+export function reduceDailyTarget(habit: Habit): number {
+  if (!habit.baselineQuantity) return 0;
+  const day = Math.max(1, reduceCycleDay(habit));
+  if (day >= REDUCE_CYCLE_DAYS) return 0;
+  return Math.round((habit.baselineQuantity * (REDUCE_CYCLE_DAYS - day)) / (REDUCE_CYCLE_DAYS - 1));
 }
 
 // Consecutive days ending today (or yesterday, if today has no entry yet) where the habit was completed.

@@ -55,7 +55,7 @@ export default function BasicsScreen() {
                 <TextInput
                   style={[styles.input, { flex: 1 }]}
                   keyboardType="numeric"
-                  placeholder="10"
+                  placeholder={`e.g. ${draft.suggestedTargetAmount ?? 10}`}
                   placeholderTextColor={colors.textMuted}
                   value={draft.targetAmount !== null ? String(draft.targetAmount) : ""}
                   onChangeText={(t) => {
