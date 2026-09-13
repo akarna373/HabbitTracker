@@ -3,10 +3,11 @@ import { getDb } from "./db";
 import { genId } from "./id";
 import { todayISO } from "./dates";
 import { getCurrentLocation } from "./location";
+import { syncGeofences } from "./geofencing";
 import { cancelNotification, computeNextOccurrence, scheduleDailyNotification, scheduleOneTimeNotification } from "./notifications";
 import { reduceCycleDay, reduceDailyTarget, REDUCE_CYCLE_DAYS } from "./progress";
 import { getSwipeSettings, saveSwipeSettings, type SwipeSettings } from "./swipeSettings";
-import type { DailyLog, Habit, Microtask, NewHabitDraft, SmokeLocation } from "./types";
+import type { DailyLog, GoalType, Habit, Microtask, NewHabitDraft, SmokeLocation } from "./types";
 
 interface HabitRow {
   id: string;
@@ -27,9 +28,11 @@ interface HabitRow {
   baselineQuantity: number | null;
   pricePerItem: number | null;
   goalType: string | null;
+  reduceDays: number | null;
   summaryTime: string | null;
   summaryNotificationId: string | null;
   locationTrackingEnabled: number;
+  backgroundLocationEnabled: number;
   createdAt: string;
   archivedAt: string | null;
 }
@@ -45,6 +48,7 @@ function rowToHabit(row: HabitRow): Habit {
     reminderEnabled: !!row.reminderEnabled,
     hasCost: !!row.hasCost,
     locationTrackingEnabled: !!row.locationTrackingEnabled,
+    backgroundLocationEnabled: !!row.backgroundLocationEnabled,
   };
 }
 
@@ -76,11 +80,14 @@ interface StoreState {
   archiveHabit: (habitId: string) => Promise<void>;
   restoreHabit: (habitId: string) => Promise<void>;
   incrementAmount: (habitId: string, date: string, delta: number) => Promise<void>;
+  setGoalType: (habitId: string, goalType: GoalType, reduceDays: number | null) => Promise<void>;
   toggleMicrotask: (habitId: string, date: string, microtaskId: string) => Promise<void>;
   deleteMicrotask: (habitId: string, microtaskId: string) => Promise<void>;
   saveReflection: (habitId: string, date: string, text: string) => Promise<void>;
   setReminder: (habitId: string, enabled: boolean, time: string | null) => Promise<void>;
   setLocationTracking: (habitId: string, enabled: boolean) => Promise<void>;
+  setBackgroundLocationTracking: (habitId: string, enabled: boolean) => Promise<void>;
+  deleteSmokeLocations: (habitId: string, ids: string[]) => Promise<void>;
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -140,12 +147,13 @@ export const useStore = create<StoreState>((set, get) => ({
       const habit = habits[i];
       if (habit.goalType !== "reduce" || !habit.hasCost || !habit.summaryTime) continue;
       await cancelNotification(habit.summaryNotificationId);
+      const cycleDays = habit.reduceDays ?? REDUCE_CYCLE_DAYS;
       const day = reduceCycleDay(habit);
       const target = reduceDailyTarget(habit);
       const todayAmount = logsByHabit[habit.id]?.find((l) => l.date === today)?.amount ?? 0;
-      const title = day <= REDUCE_CYCLE_DAYS ? `Day ${day} of ${REDUCE_CYCLE_DAYS}` : "Reduction complete";
+      const title = day <= cycleDays ? `Day ${day} of ${cycleDays}` : "Reduction complete";
       const body =
-        day <= REDUCE_CYCLE_DAYS
+        day <= cycleDays
           ? `Today's target: ${target} ${habit.unit ?? ""}. You've logged ${todayAmount} so far.`
           : `You've reached your zero target. You've logged ${todayAmount} today.`;
       const summaryNotificationId = await scheduleOneTimeNotification(title, body, computeNextOccurrence(habit.summaryTime));
@@ -154,6 +162,10 @@ export const useStore = create<StoreState>((set, get) => ({
     }
 
     set({ ready: true, habits, archivedHabits, microtasksByHabit, logsByHabit, smokeLocationsByHabit, swipeSettings });
+
+    // Android clears registered geofences on reboot, so re-register on every
+    // app open - same defensive pattern as the notification reschedule above.
+    syncGeofences(habits, smokeLocationsByHabit);
   },
 
   createHabit: async (draft) => {
@@ -174,11 +186,12 @@ export const useStore = create<StoreState>((set, get) => ({
     if (draft.hasCost && draft.summaryTime) {
       if (draft.goalType === "reduce") {
         // Day 1 of the reduce cycle always starts at the full baseline
-        // (day(14-1)/13 = baseline) - a one-time notification, since a
+        // (day(N-1)/(N-1) = baseline) - a one-time notification, since a
         // DAILY trigger can't carry a target that changes as the cycle
         // progresses (see reduceCycleDay/reduceDailyTarget in lib/progress.ts).
+        const cycleDays = draft.reduceDays ?? REDUCE_CYCLE_DAYS;
         summaryNotificationId = await scheduleOneTimeNotification(
-          `Day 1 of ${REDUCE_CYCLE_DAYS}`,
+          `Day 1 of ${cycleDays}`,
           `Today's target: ${draft.baselineQuantity ?? 0} ${draft.unit ?? ""}. You've logged 0 so far.`,
           computeNextOccurrence(draft.summaryTime)
         );
@@ -195,9 +208,9 @@ export const useStore = create<StoreState>((set, get) => ({
       `INSERT INTO habits (
         id, kind, category, templateId, name, trackingMethod, targetAmount, unit, reason,
         frequencyType, repeatDays, reminderEnabled, reminderTime, reminderNotificationId,
-        hasCost, baselineQuantity, pricePerItem, goalType, summaryTime, summaryNotificationId,
+        hasCost, baselineQuantity, pricePerItem, goalType, reduceDays, summaryTime, summaryNotificationId,
         createdAt, archivedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`,
       [
         id,
         draft.kind,
@@ -217,6 +230,7 @@ export const useStore = create<StoreState>((set, get) => ({
         draft.baselineQuantity,
         draft.pricePerItem,
         draft.goalType,
+        draft.reduceDays,
         draft.summaryTime,
         summaryNotificationId,
         now,
@@ -254,9 +268,11 @@ export const useStore = create<StoreState>((set, get) => ({
       baselineQuantity: draft.baselineQuantity,
       pricePerItem: draft.pricePerItem,
       goalType: draft.goalType,
+      reduceDays: draft.reduceDays,
       summaryTime: draft.summaryTime,
       summaryNotificationId,
       locationTrackingEnabled: false,
+      backgroundLocationEnabled: false,
       createdAt: now,
       archivedAt: null,
     };
@@ -371,14 +387,57 @@ export const useStore = create<StoreState>((set, get) => ({
           "INSERT INTO smoke_locations (id, habitId, latitude, longitude, loggedAt) VALUES (?,?,?,?,?)",
           [location.id, location.habitId, location.latitude, location.longitude, location.loggedAt]
         );
-        set((s) => ({
-          smokeLocationsByHabit: {
-            ...s.smokeLocationsByHabit,
-            [habitId]: [...(s.smokeLocationsByHabit[habitId] ?? []), location],
-          },
-        }));
+        const nextSmokeLocationsByHabit = {
+          ...get().smokeLocationsByHabit,
+          [habitId]: [...(get().smokeLocationsByHabit[habitId] ?? []), location],
+        };
+        set({ smokeLocationsByHabit: nextSmokeLocationsByHabit });
+        // This new point may have just completed a 3-point hotspot cluster -
+        // re-sync so a background geofence gets registered for it right away.
+        syncGeofences(get().habits, nextSmokeLocationsByHabit);
       })();
     }
+  },
+
+  setGoalType: async (habitId, goalType, reduceDays) => {
+    const db = await getDb();
+    const habit = get().habits.find((h) => h.id === habitId);
+    if (!habit) return;
+    const updatedHabit: Habit = { ...habit, goalType, reduceDays };
+
+    await cancelNotification(habit.summaryNotificationId);
+    let summaryNotificationId: string | null = null;
+    if (updatedHabit.hasCost && updatedHabit.summaryTime) {
+      if (goalType === "reduce") {
+        const cycleDays = reduceDays ?? REDUCE_CYCLE_DAYS;
+        const day = reduceCycleDay(updatedHabit);
+        const target = reduceDailyTarget(updatedHabit);
+        const today = todayISO();
+        const todayAmount = get().logsByHabit[habitId]?.find((l) => l.date === today)?.amount ?? 0;
+        const title = day <= cycleDays ? `Day ${day} of ${cycleDays}` : "Reduction complete";
+        const body =
+          day <= cycleDays
+            ? `Today's target: ${target} ${updatedHabit.unit ?? ""}. You've logged ${todayAmount} so far.`
+            : `You've reached your zero target. You've logged ${todayAmount} today.`;
+        summaryNotificationId = await scheduleOneTimeNotification(title, body, computeNextOccurrence(updatedHabit.summaryTime));
+      } else {
+        summaryNotificationId = await scheduleDailyNotification(
+          "Your 10 PM summary",
+          `See how today compared for ${updatedHabit.name}.`,
+          updatedHabit.summaryTime
+        );
+      }
+    }
+
+    await db.runAsync("UPDATE habits SET goalType = ?, reduceDays = ?, summaryNotificationId = ? WHERE id = ?", [
+      goalType,
+      reduceDays,
+      summaryNotificationId,
+      habitId,
+    ]);
+    set((s) => ({
+      habits: s.habits.map((h) => (h.id === habitId ? { ...h, goalType, reduceDays, summaryNotificationId } : h)),
+    }));
   },
 
   toggleMicrotask: async (habitId, date, microtaskId) => {
@@ -475,10 +534,44 @@ export const useStore = create<StoreState>((set, get) => ({
 
   setLocationTracking: async (habitId, enabled) => {
     const db = await getDb();
-    await db.runAsync("UPDATE habits SET locationTrackingEnabled = ? WHERE id = ?", [enabled ? 1 : 0, habitId]);
+    // Background detection can't exist without foreground capture - turning
+    // foreground off takes background with it.
+    const backgroundLocationEnabled = enabled ? get().habits.find((h) => h.id === habitId)?.backgroundLocationEnabled ?? false : false;
+    await db.runAsync("UPDATE habits SET locationTrackingEnabled = ?, backgroundLocationEnabled = ? WHERE id = ?", [
+      enabled ? 1 : 0,
+      backgroundLocationEnabled ? 1 : 0,
+      habitId,
+    ]);
     set((s) => ({
-      habits: s.habits.map((h) => (h.id === habitId ? { ...h, locationTrackingEnabled: enabled } : h)),
+      habits: s.habits.map((h) => (h.id === habitId ? { ...h, locationTrackingEnabled: enabled, backgroundLocationEnabled } : h)),
     }));
+    syncGeofences(get().habits, get().smokeLocationsByHabit);
+  },
+
+  setBackgroundLocationTracking: async (habitId, enabled) => {
+    const db = await getDb();
+    await db.runAsync("UPDATE habits SET backgroundLocationEnabled = ? WHERE id = ?", [enabled ? 1 : 0, habitId]);
+    set((s) => ({
+      habits: s.habits.map((h) => (h.id === habitId ? { ...h, backgroundLocationEnabled: enabled } : h)),
+    }));
+    syncGeofences(get().habits, get().smokeLocationsByHabit);
+  },
+
+  deleteSmokeLocations: async (habitId, ids) => {
+    if (ids.length === 0) return;
+    const db = await getDb();
+    const placeholders = ids.map(() => "?").join(",");
+    await db.runAsync(`DELETE FROM smoke_locations WHERE id IN (${placeholders})`, ids);
+
+    const idSet = new Set(ids);
+    const nextSmokeLocationsByHabit = {
+      ...get().smokeLocationsByHabit,
+      [habitId]: (get().smokeLocationsByHabit[habitId] ?? []).filter((l) => !idSet.has(l.id)),
+    };
+    set({ smokeLocationsByHabit: nextSmokeLocationsByHabit });
+    // Deleting a cluster's points removes it from the next geofence sync too -
+    // this is what actually stops a mis-logged spot (e.g. home) from firing.
+    syncGeofences(get().habits, nextSmokeLocationsByHabit);
   },
 }));
 

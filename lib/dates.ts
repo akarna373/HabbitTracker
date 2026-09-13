@@ -55,3 +55,9 @@ export function formatLongDate(iso: string): string {
   const date = new Date(y, m - 1, d);
   return date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
 }
+
+// e.g. "Sep 13, 7:04 PM" - for a full ISO datetime, not a "YYYY-MM-DD" date.
+export function formatShortDateTime(isoDateTime: string): string {
+  const date = new Date(isoDateTime);
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}

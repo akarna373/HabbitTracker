@@ -29,6 +29,7 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
           summaryTime TEXT,
           summaryNotificationId TEXT,
           locationTrackingEnabled INTEGER NOT NULL DEFAULT 0,
+          backgroundLocationEnabled INTEGER NOT NULL DEFAULT 0,
           createdAt TEXT NOT NULL,
           archivedAt TEXT
         );
@@ -61,6 +62,16 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
       // on every install that already has it (fresh installs included).
       try {
         await db.execAsync("ALTER TABLE habits ADD COLUMN locationTrackingEnabled INTEGER NOT NULL DEFAULT 0;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN backgroundLocationEnabled INTEGER NOT NULL DEFAULT 0;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN reduceDays INTEGER;");
       } catch {
         // column already exists
       }

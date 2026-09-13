@@ -19,7 +19,13 @@ export function formatTime12h(time: string | null): string {
 
 export function isHabitCompleteOn(habit: Habit, logs: DailyLog[] | undefined, date: string): boolean {
   const log = selectLogForDate(logs, date);
-  if (habit.kind === "quit") return log !== undefined;
+  if (habit.kind === "quit") {
+    if (!log) return false;
+    if (habit.goalType === "reduce") return log.amount <= reduceDailyTargetForDate(habit, date);
+    if (habit.goalType === "quit_completely") return log.amount === 0;
+    // track_only, or a non-cost quit habit with no goalType - any logged day counts.
+    return true;
+  }
   if (habit.trackingMethod === "checkin") return (log?.amount ?? 0) >= 1;
   return (log?.amount ?? 0) >= (habit.targetAmount ?? Infinity);
 }
@@ -39,16 +45,25 @@ export function baselineCost(habit: Habit): number {
 // target declines linearly to 0 by day 14, and stays at 0 after (maintenance).
 export const REDUCE_CYCLE_DAYS = 14;
 
-export function reduceCycleDay(habit: Habit): number {
+export function reduceCycleDayForDate(habit: Habit, date: string): number {
   const createdDate = habit.createdAt.slice(0, 10);
-  return daysBetween(createdDate, todayISO()) + 1;
+  return daysBetween(createdDate, date) + 1;
+}
+
+export function reduceCycleDay(habit: Habit): number {
+  return reduceCycleDayForDate(habit, todayISO());
+}
+
+export function reduceDailyTargetForDate(habit: Habit, date: string): number {
+  if (!habit.baselineQuantity) return 0;
+  const cycleDays = habit.reduceDays ?? REDUCE_CYCLE_DAYS;
+  const day = Math.max(1, reduceCycleDayForDate(habit, date));
+  if (day >= cycleDays || cycleDays <= 1) return 0;
+  return Math.round((habit.baselineQuantity * (cycleDays - day)) / (cycleDays - 1));
 }
 
 export function reduceDailyTarget(habit: Habit): number {
-  if (!habit.baselineQuantity) return 0;
-  const day = Math.max(1, reduceCycleDay(habit));
-  if (day >= REDUCE_CYCLE_DAYS) return 0;
-  return Math.round((habit.baselineQuantity * (REDUCE_CYCLE_DAYS - day)) / (REDUCE_CYCLE_DAYS - 1));
+  return reduceDailyTargetForDate(habit, todayISO());
 }
 
 // Consecutive days ending today (or yesterday, if today has no entry yet) where the habit was completed.

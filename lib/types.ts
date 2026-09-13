@@ -4,7 +4,7 @@ export type TrackingMethod = "checkin" | "amount";
 
 export type FrequencyType = "daily" | "weekdays" | "weekly" | "custom";
 
-export type GoalType = "reduce_to_zero" | "reduce" | "maintain_zero";
+export type GoalType = "reduce" | "quit_completely" | "track_only";
 
 export interface Habit {
   id: string;
@@ -25,9 +25,11 @@ export interface Habit {
   baselineQuantity: number | null;
   pricePerItem: number | null;
   goalType: GoalType | null;
+  reduceDays: number | null; // cycle length for the "reduce" goal, days
   summaryTime: string | null; // "HH:mm", cost-tracked quit habits only
   summaryNotificationId: string | null;
   locationTrackingEnabled: boolean;
+  backgroundLocationEnabled: boolean;
   createdAt: string;
   archivedAt: string | null;
 }
@@ -73,6 +75,7 @@ export interface NewHabitDraft {
   baselineQuantity: number | null;
   pricePerItem: number | null;
   goalType: GoalType | null;
+  reduceDays: number | null;
   summaryTime: string | null;
   microtasks: string[];
 }

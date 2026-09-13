@@ -56,7 +56,7 @@ export default function SmokingSummaryScreen() {
       <ScreenHeader title="Your 10 PM summary" subtitle="A factual, supportive reflection." />
       <ScrollView contentContainerStyle={styles.content}>
         <Card highlighted>
-          {isReduce ? <Text style={styles.cardCaption}>DAY {day} OF {REDUCE_CYCLE_DAYS}</Text> : null}
+          {isReduce ? <Text style={styles.cardCaption}>DAY {day} OF {habit.reduceDays ?? REDUCE_CYCLE_DAYS}</Text> : null}
           <Text style={styles.cardTitle}>
             Today: {todayAmount} {habit.unit}
           </Text>

@@ -17,6 +17,22 @@ try {
   Notifications = null;
 }
 
+// Android notifications default to a silent "DEFAULT" importance channel -
+// no heads-up popup, no sound, easy to miss entirely in the shade. The
+// location-deterrent alert only works if the user actually notices it, so
+// it gets its own high-importance channel.
+const DETERRENT_CHANNEL_ID = "deterrent";
+if (Notifications) {
+  // "default" isn't a real sound resource name on Android here (it wants an
+  // actual registered file, or nothing) - omitting it lets the channel use
+  // the system's own default notification sound.
+  Notifications.setNotificationChannelAsync(DETERRENT_CHANNEL_ID, {
+    name: "Location deterrent alerts",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+  }).catch(() => {});
+}
+
 export async function ensureNotificationPermission(): Promise<boolean> {
   if (!Notifications) return false;
   const current = await Notifications.getPermissionsAsync();
@@ -73,7 +89,7 @@ export async function scheduleImmediateNotification(title: string, body: string)
   if (!granted) return;
   await Notifications.scheduleNotificationAsync({
     content: { title, body },
-    trigger: null,
+    trigger: { channelId: DETERRENT_CHANNEL_ID },
   });
 }
 

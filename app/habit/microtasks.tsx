@@ -63,6 +63,7 @@ export default function MicrotasksScreen() {
       baselineQuantity: finalDraft.baselineQuantity,
       pricePerItem: finalDraft.pricePerItem,
       goalType: finalDraft.goalType,
+      reduceDays: finalDraft.reduceDays,
       summaryTime: finalDraft.hasCost ? finalDraft.summaryTime : null,
       microtasks: tasks.filter((t) => t.trim().length > 0),
     });

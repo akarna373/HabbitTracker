@@ -8,22 +8,21 @@ import { ScreenHeader } from "../../components/ScreenHeader";
 import { ThemedTimePicker } from "../../components/ThemedTimePicker";
 import { getCurrencySymbol } from "../../lib/currency";
 import { useDraftStore } from "../../lib/draftStore";
+import { GOAL_OPTIONS } from "../../lib/goals";
 import { formatTime12h } from "../../lib/progress";
 import { colors, spacing, typography } from "../../lib/theme";
-import type { GoalType } from "../../lib/types";
-
-const GOALS: { id: GoalType; label: string }[] = [
-  { id: "reduce", label: "Reduce, then reach zero" },
-  { id: "reduce_to_zero", label: "Stop immediately" },
-  { id: "maintain_zero", label: "Stay at zero" },
-];
 
 export default function SmokingSetupScreen() {
   const draft = useDraftStore();
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   const canContinue =
-    draft.baselineQuantity !== null && draft.baselineQuantity >= 0 && draft.pricePerItem !== null && draft.pricePerItem >= 0;
+    draft.baselineQuantity !== null &&
+    draft.baselineQuantity >= 0 &&
+    draft.pricePerItem !== null &&
+    draft.pricePerItem >= 0 &&
+    draft.goalType !== null &&
+    (draft.goalType !== "reduce" || (draft.reduceDays !== null && draft.reduceDays >= 2));
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -60,9 +59,25 @@ export default function SmokingSetupScreen() {
         </Card>
 
         <Text style={styles.label}>GOAL</Text>
-        {GOALS.map((g) => (
+        {GOAL_OPTIONS.map((g) => (
           <Card key={g.id} onPress={() => draft.set({ goalType: g.id })} highlighted={draft.goalType === g.id}>
             <Text style={styles.goalText}>{g.label}</Text>
+            {g.id === "reduce" && draft.goalType === "reduce" ? (
+              <View style={styles.reduceDaysRow}>
+                <Text style={styles.reduceDaysLabel}>Over how many days?</Text>
+                <TextInput
+                  style={styles.reduceDaysInput}
+                  keyboardType="numeric"
+                  placeholder="e.g. 14"
+                  placeholderTextColor={colors.textMuted}
+                  value={draft.reduceDays !== null ? String(draft.reduceDays) : ""}
+                  onChangeText={(t) => {
+                    const digits = t.replace(/[^0-9]/g, "");
+                    draft.set({ reduceDays: digits ? Number(digits) : null });
+                  }}
+                />
+              </View>
+            ) : null}
           </Card>
         ))}
 
@@ -101,4 +116,12 @@ const styles = StyleSheet.create({
   label: { ...typography.label, marginTop: spacing.sm, marginBottom: spacing.xs },
   input: { ...typography.body, paddingVertical: 4 },
   goalText: { ...typography.body },
+  reduceDaysRow: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  reduceDaysLabel: { ...typography.caption, marginBottom: spacing.xs },
+  reduceDaysInput: { ...typography.body, paddingVertical: 4 },
 });

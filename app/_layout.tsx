@@ -5,10 +5,21 @@ import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import * as SplashScreen from "expo-splash-screen";
 import { colors } from "../lib/theme";
 import { useStore } from "../lib/store";
 import { hasSeenOnboarding } from "../lib/onboarding";
 import { ConfirmDialogHost } from "../components/ConfirmDialog";
+// Side-effect only: registers the geofencing TaskManager task at module
+// scope so Android can invoke it headlessly (app fully closed) - must be
+// part of the root bundle graph, not conditionally imported from a screen.
+import "../lib/geofencing";
+
+// The native splash's own auto-hide heuristic isn't reliable on every
+// device - it can stay up forever even once real content is rendering.
+// Taking explicit control instead: hold it here, hide it ourselves once
+// every startup gate below has actually passed.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const ready = useStore((s) => s.ready);
@@ -16,6 +27,7 @@ export default function RootLayout() {
   const [error, setError] = useState<string | null>(null);
   const [seenOnboarding, setSeenOnboarding] = useState<boolean | null>(null);
   const [fontsLoaded] = useFonts({ Baloo2_800ExtraBold });
+  const appReady = ready && seenOnboarding !== null && fontsLoaded;
 
   useEffect(() => {
     init().catch((e) => setError(String(e)));
@@ -28,7 +40,13 @@ export default function RootLayout() {
     }
   }, [ready, seenOnboarding]);
 
-  if (!ready || seenOnboarding === null || !fontsLoaded) {
+  useEffect(() => {
+    if (appReady) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [appReady]);
+
+  if (!appReady) {
     return <View style={styles.loading} />;
   }
 

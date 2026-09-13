@@ -1,17 +1,20 @@
 import { useRef } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
 import { colors, radii, spacing } from "../lib/theme";
 
 interface PrimaryButtonProps {
   title: string;
   onPress: () => void;
   variant?: "primary" | "outline";
+  size?: "default" | "small";
   disabled?: boolean;
   loading?: boolean;
+  style?: ViewStyle;
 }
 
-export function PrimaryButton({ title, onPress, variant = "primary", disabled, loading }: PrimaryButtonProps) {
+export function PrimaryButton({ title, onPress, variant = "primary", size = "default", disabled, loading, style }: PrimaryButtonProps) {
   const isOutline = variant === "outline";
+  const isSmall = size === "small";
   const isHandling = useRef(false);
 
   const handlePress = async () => {
@@ -37,14 +40,16 @@ export function PrimaryButton({ title, onPress, variant = "primary", disabled, l
       style={({ pressed }) => [
         styles.button,
         isOutline ? styles.outline : styles.primary,
+        isSmall && styles.small,
         (disabled || loading) && styles.disabled,
         pressed && styles.pressed,
+        style,
       ]}
     >
       {loading ? (
         <ActivityIndicator color={isOutline ? colors.accentPink : colors.background} />
       ) : (
-        <Text style={[styles.text, isOutline && styles.outlineText]}>{title}</Text>
+        <Text style={[styles.text, isOutline && styles.outlineText, isSmall && styles.smallText]}>{title}</Text>
       )}
     </Pressable>
   );
@@ -66,6 +71,14 @@ const styles = StyleSheet.create({
   outline: { backgroundColor: "rgba(11,10,15,0.01)", borderWidth: 1, borderColor: colors.accentPink },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.85 },
+  small: {
+    width: "auto",
+    alignSelf: "center",
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
   text: { color: colors.background, fontSize: 16, fontWeight: "700" },
   outlineText: { color: colors.accentPink },
+  smallText: { fontSize: 13 },
 });

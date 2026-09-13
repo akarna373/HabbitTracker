@@ -22,6 +22,7 @@ interface DraftState {
   baselineQuantity: number | null;
   pricePerItem: number | null;
   goalType: GoalType | null;
+  reduceDays: number | null;
   summaryTime: string | null;
   microtasks: string[];
   // Template-derived example numbers shown only as input placeholders (e.g.
@@ -52,6 +53,7 @@ const initial = {
   baselineQuantity: null,
   pricePerItem: null,
   goalType: null as GoalType | null,
+  reduceDays: null as number | null,
   summaryTime: "22:00",
   microtasks: [] as string[],
   suggestedTargetAmount: null as number | null,

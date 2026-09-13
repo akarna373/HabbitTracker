@@ -11,7 +11,13 @@ import { ScreenHeader } from "../../../components/ScreenHeader";
 import { ThemedSwitch } from "../../../components/ThemedSwitch";
 import { formatMoney } from "../../../lib/currency";
 import { todayISO } from "../../../lib/dates";
-import { ensureLocationPermission, findHotspots, getCurrentLocation, nearestHotspot } from "../../../lib/location";
+import {
+  ensureLocationPermission,
+  findHotspots,
+  getCurrentLocation,
+  hasBackgroundLocationPermission,
+  nearestHotspot,
+} from "../../../lib/location";
 import { scheduleImmediateNotification } from "../../../lib/notifications";
 import { baselineCost, computeStreak, costForAmount, reduceCycleDay, reduceDailyTarget, REDUCE_CYCLE_DAYS } from "../../../lib/progress";
 import { selectLogForDate, useStore } from "../../../lib/store";
@@ -34,6 +40,7 @@ export default function HabitDetailScreen() {
   const saveReflection = useStore((s) => s.saveReflection);
   const deleteHabit = useStore((s) => s.deleteHabit);
   const setLocationTracking = useStore((s) => s.setLocationTracking);
+  const setBackgroundLocationTracking = useStore((s) => s.setBackgroundLocationTracking);
   const smokeLocations = useStore((s) => s.smokeLocationsByHabit[id ?? ""]);
 
   const today = todayISO();
@@ -44,6 +51,7 @@ export default function HabitDetailScreen() {
   // this the Switch (fully controlled by the store) stalls visibly before
   // moving.
   const [trackingUiValue, setTrackingUiValue] = useState(habit?.locationTrackingEnabled ?? false);
+  const [backgroundUiValue, setBackgroundUiValue] = useState(habit?.backgroundLocationEnabled ?? false);
 
   useEffect(() => {
     setReflection(log?.reflection ?? "");
@@ -58,6 +66,10 @@ export default function HabitDetailScreen() {
   useEffect(() => {
     setTrackingUiValue(habit?.locationTrackingEnabled ?? false);
   }, [habit?.locationTrackingEnabled]);
+
+  useEffect(() => {
+    setBackgroundUiValue(habit?.backgroundLocationEnabled ?? false);
+  }, [habit?.backgroundLocationEnabled]);
 
   useEffect(() => {
     if (!habit?.locationTrackingEnabled) return;
@@ -104,6 +116,23 @@ export default function HabitDetailScreen() {
     await setLocationTracking(habit.id, value);
   };
 
+  const toggleBackgroundLocationTracking = async (value: boolean) => {
+    if (value) {
+      // Only show the prominent-disclosure screen before the OS permission is
+      // actually requested for the first time - once granted, re-enabling is
+      // just a toggle, no need to walk the user through it again.
+      if (await hasBackgroundLocationPermission()) {
+        setBackgroundUiValue(true);
+        await setBackgroundLocationTracking(habit.id, true);
+        return;
+      }
+      router.push(`/habit/background-location-disclosure?habitId=${habit.id}`);
+      return;
+    }
+    setBackgroundUiValue(false);
+    await setBackgroundLocationTracking(habit.id, false);
+  };
+
   const confirmDelete = () => {
     confirmDialog("Delete habit?", `This removes "${habit.name}" and its history.`, [
       { text: "Cancel", style: "cancel" },
@@ -135,13 +164,22 @@ export default function HabitDetailScreen() {
     const compareCost = isReduce ? costForAmount(habit, reduceDailyTarget(habit)) : baselineCost(habit);
     const diff = compareCost - cost;
     const compareLabel = isReduce ? "today's target" : "baseline";
+    const cycleDays = habit.reduceDays ?? REDUCE_CYCLE_DAYS;
+    const goalTag =
+      habit.goalType === "reduce"
+        ? `DAY ${day} OF ${cycleDays}`
+        : habit.goalType === "quit_completely"
+          ? "QUIT COMPLETELY"
+          : habit.goalType === "track_only"
+            ? "TRACKING ONLY"
+            : "QUIT A HABIT";
 
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <ScreenHeader title={habit.name} subtitle="Today's honest check-in" />
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.tag}>
-            <Text style={styles.tagText}>{isReduce ? `DAY ${day} OF ${REDUCE_CYCLE_DAYS}` : "QUIT A HABIT"}</Text>
+            <Text style={styles.tagText}>{goalTag}</Text>
           </View>
 
           <Counter
@@ -164,26 +202,50 @@ export default function HabitDetailScreen() {
 
           <PrimaryButton title="Motivate me" onPress={() => router.push(`/habit/${habit.id}/motivate`)} />
 
-          <Card>
+          <Card style={styles.locationCard}>
             <View style={styles.row}>
               <View style={styles.rowTextCol}>
                 <Text style={styles.cardTitle}>Track smoking locations</Text>
-                <Text style={styles.cardCaption}>Get warned when you're at a place you usually smoke</Text>
-                <Text style={styles.cardCaption}>Log as you smoke, not in bulk later - bulk logs record the wrong spot</Text>
+                <Text style={styles.cardCaption}>Warns you at your usual smoking spots</Text>
+                <Text style={styles.cardCaption}>Log in the moment - bulk logs misplace the spot</Text>
               </View>
               <ThemedSwitch value={trackingUiValue} onValueChange={toggleLocationTracking} />
             </View>
+            {trackingUiValue ? (
+              <View style={[styles.row, styles.subRow]}>
+                <View style={styles.rowTextCol}>
+                  <Text style={styles.cardTitle}>Warn me even when the app is closed</Text>
+                  <Text style={styles.cardCaption}>Needs background location - may be delayed by the OS</Text>
+                </View>
+                <ThemedSwitch value={backgroundUiValue} onValueChange={toggleBackgroundLocationTracking} />
+              </View>
+            ) : null}
+            {trackingUiValue && (smokeLocations?.length ?? 0) > 0 ? (
+              <PrimaryButton
+                title="Manage recorded locations"
+                variant="outline"
+                size="small"
+                onPress={() => router.push(`/habit/manage-locations?habitId=${habit.id}`)}
+              />
+            ) : null}
           </Card>
 
-          <PrimaryButton
-            title={amount === 0 ? "I stayed smoke-free today" : `You logged ${amount} ${habit.unit ?? ""} today`}
-            variant="outline"
-            disabled={amount !== 0}
-            onPress={() => incrementAmount(habit.id, today, 0)}
-          />
+          {amount === 0 ? (
+            <PrimaryButton
+              title="I stayed smoke-free today"
+              variant="outline"
+              onPress={() => incrementAmount(habit.id, today, 0)}
+              style={styles.statusButton}
+            />
+          ) : null}
 
-          <PrimaryButton title="Today's summary" variant="outline" onPress={() => router.push(`/habit/${habit.id}/summary`)} />
-          <PrimaryButton title="Delete habit" variant="outline" onPress={confirmDelete} />
+          <PrimaryButton
+            title="Today's summary"
+            variant="outline"
+            onPress={() => router.push(`/habit/${habit.id}/summary`)}
+            style={amount === 0 ? undefined : styles.statusButton}
+          />
+          <PrimaryButton title="Delete habit" variant="outline" onPress={confirmDelete} style={styles.deleteButton} />
         </ScrollView>
       </SafeAreaView>
     );
@@ -246,7 +308,7 @@ export default function HabitDetailScreen() {
           />
         </Card>
         <PrimaryButton title="Save reflection" variant="outline" onPress={() => saveReflection(habit.id, today, reflection)} />
-        <PrimaryButton title="Delete habit" variant="outline" onPress={confirmDelete} />
+        <PrimaryButton title="Delete habit" variant="outline" onPress={confirmDelete} style={styles.deleteButton} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -270,6 +332,10 @@ const styles = StyleSheet.create({
   microtask: { ...typography.body, marginBottom: spacing.xs },
   label: { ...typography.label, marginTop: spacing.md, marginBottom: spacing.xs },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  subRow: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
   rowTextCol: { flex: 1, paddingRight: spacing.sm },
   input: { ...typography.body, paddingVertical: 4 },
+  locationCard: { marginTop: spacing.sm },
+  statusButton: { marginTop: spacing.md },
+  deleteButton: { marginTop: spacing.md },
 });

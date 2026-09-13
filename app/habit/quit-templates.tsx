@@ -32,7 +32,8 @@ export default function QuitTemplatesScreen() {
       suggestedBaselineQuantity: template.hasCost ? template.defaultBaselineQuantity : null,
       suggestedPricePerItem: template.hasCost ? template.defaultPricePerItem : null,
       suggestedTargetAmount: template.hasCost ? null : template.defaultBaselineQuantity,
-      goalType: template.hasCost ? "reduce" : null,
+      goalType: null,
+      reduceDays: null,
       summaryTime: template.hasCost ? "22:00" : null,
     });
     router.push(template.hasCost ? "/habit/smoking-setup" : "/habit/basics");
@@ -52,6 +53,7 @@ export default function QuitTemplatesScreen() {
       suggestedBaselineQuantity: null,
       suggestedPricePerItem: null,
       goalType: null,
+      reduceDays: null,
       summaryTime: null,
     });
     router.push("/habit/basics");

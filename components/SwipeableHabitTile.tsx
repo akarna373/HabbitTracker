@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
+import { GOAL_BADGES } from "../lib/goals";
 import { useStore } from "../lib/store";
 import { colors, radii, spacing, typography } from "../lib/theme";
 import type { Habit } from "../lib/types";
@@ -76,6 +78,8 @@ export function SwipeableHabitTile({ habit, done, subtitle, reminderText, onPres
   // like a plain, non-swipeable card.
   const inSwipe = swipeSettings.archiveEnabled || swipeSettings.deleteEnabled;
 
+  const goalBadge = habit.kind === "quit" && habit.hasCost && habit.goalType ? GOAL_BADGES[habit.goalType] : null;
+
   const tile = (
     <Card
       onPress={onPress}
@@ -86,6 +90,15 @@ export function SwipeableHabitTile({ habit, done, subtitle, reminderText, onPres
       <Text style={styles.habitName}>{habit.name}</Text>
       <Text style={styles.habitSubtitle}>{subtitle}</Text>
       {reminderText ? <Text style={styles.habitReminder}>{reminderText}</Text> : null}
+      {goalBadge ? (
+        <Pressable
+          hitSlop={8}
+          style={[styles.goalBadge, { backgroundColor: goalBadge.color }]}
+          onPress={() => router.push(`/habit/change-goal?habitId=${habit.id}`)}
+        >
+          <Text style={styles.goalBadgeText}>{goalBadge.label}</Text>
+        </Pressable>
+      ) : null}
     </Card>
   );
 
@@ -186,6 +199,15 @@ const styles = StyleSheet.create({
   habitName: { ...typography.body, fontWeight: "700", marginBottom: 2 },
   habitSubtitle: { ...typography.caption },
   habitReminder: { ...typography.caption, color: colors.softAccent, marginTop: 2 },
+  goalBadge: {
+    position: "absolute",
+    right: spacing.md,
+    bottom: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radii.chip,
+  },
+  goalBadgeText: { ...typography.caption, color: "#FFFFFF", fontWeight: "700" },
   action: { width: ACTION_WIDTH },
   actionLeft: { alignItems: "flex-start" },
   actionRight: { alignItems: "flex-end" },

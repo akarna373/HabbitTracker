@@ -6,6 +6,8 @@ export const colors = {
   accentPink: "#FF4F8B",
   accentRed: "#FF5A62",
   softAccent: "#FFB5CC",
+  goalYellow: "#FF8F00",
+  goalGreen: "#33B679",
   textPrimary: "#FFF7FA",
   textSecondary: "#A8A2B0",
   textMuted: "#6E6878",
