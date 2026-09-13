@@ -17,6 +17,7 @@ import {
 } from "../../../lib/progress";
 import { selectLogForDate, useStore } from "../../../lib/store";
 import { colors, spacing, typography } from "../../../lib/theme";
+import { getQuitCopy } from "../../../lib/templates";
 
 export default function SmokingSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,6 +26,7 @@ export default function SmokingSummaryScreen() {
 
   if (!habit) return null;
 
+  const { verb, daysLabel } = getQuitCopy(habit.templateId);
   const today = todayISO();
   const yesterday = addDays(today, -1);
   const todayAmount = selectLogForDate(logs, today)?.amount ?? 0;
@@ -44,7 +46,7 @@ export default function SmokingSummaryScreen() {
   if (yesterdayLog === undefined) {
     comparisonText = "No comparison yet - check in again tomorrow.";
   } else if (todayAmount < yesterdayLog.amount) {
-    comparisonText = `You smoked ${yesterdayLog.amount - todayAmount} less than yesterday`;
+    comparisonText = `You ${verb} ${yesterdayLog.amount - todayAmount} less than yesterday`;
   } else if (todayAmount === yesterdayLog.amount) {
     comparisonText = "Same as yesterday - steady counts too";
   } else {
@@ -78,7 +80,7 @@ export default function SmokingSummaryScreen() {
 
         <Card>
           <Text style={styles.cardTitle}>This week</Text>
-          <Text style={styles.cardBody}>{smokeFreeDays} smoke-free days</Text>
+          <Text style={styles.cardBody}>{smokeFreeDays} {daysLabel}</Text>
           <Text style={styles.cardCaption}>{formatMoney(savings)} estimated savings</Text>
         </Card>
 

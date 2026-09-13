@@ -1,0 +1,420 @@
+<title>Habbit Privacy Policy</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap');
+
+  :root {
+    --bg: #FAF5F3;
+    --surface: #FFFFFF;
+    --surface-raised: #FFF1F6;
+    --border: #F0DEE6;
+    --accent: #D6205F;
+    --accent-soft: #FBE4EC;
+    --text-primary: #241A20;
+    --text-secondary: #6E5D64;
+    --text-muted: #9C8990;
+    --serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+    --brand: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0B0A0F;
+      --surface: #17141C;
+      --surface-raised: #1F1B26;
+      --border: #2A2530;
+      --accent: #FF4F8B;
+      --accent-soft: #2A1620;
+      --text-primary: #FFF7FA;
+      --text-secondary: #A8A2B0;
+      --text-muted: #6E6878;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0B0A0F;
+    --surface: #17141C;
+    --surface-raised: #1F1B26;
+    --border: #2A2530;
+    --accent: #FF4F8B;
+    --accent-soft: #2A1620;
+    --text-primary: #FFF7FA;
+    --text-secondary: #A8A2B0;
+    --text-muted: #6E6878;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.65;
+    padding-inline: 20px;
+    padding-block: 0;
+  }
+
+  .page {
+    max-width: 680px;
+    margin: 0 auto;
+    padding-block: 48px 80px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+
+  .wordmark {
+    font-family: var(--brand);
+    font-weight: 800;
+    font-size: 28px;
+    color: var(--accent);
+    letter-spacing: 0.2px;
+  }
+
+  .doc-label {
+    font-family: var(--brand);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .effective-date {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 40px;
+  }
+
+  h1 {
+    font-family: var(--brand);
+    font-weight: 800;
+    font-size: clamp(28px, 6vw, 38px);
+    line-height: 1.15;
+    text-wrap: balance;
+    margin: 0 0 14px;
+    color: var(--text-primary);
+  }
+
+  .intro {
+    font-size: 18px;
+    color: var(--text-secondary);
+    max-width: 62ch;
+    margin: 0 0 32px;
+  }
+
+  .tldr {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 48px;
+  }
+
+  .tldr .doc-label {
+    display: block;
+    margin-bottom: 10px;
+    color: var(--accent);
+  }
+
+  .tldr ul {
+    margin: 0;
+    padding-left: 1.1em;
+  }
+
+  .tldr li {
+    margin-bottom: 8px;
+  }
+
+  .tldr li:last-child { margin-bottom: 0; }
+
+  section.clause {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 4px 18px;
+    margin-bottom: 36px;
+  }
+
+  .clause-number {
+    font-family: var(--brand);
+    font-weight: 800;
+    font-size: 22px;
+    color: var(--accent);
+    line-height: 1.3;
+    border-left: 3px solid var(--accent-soft);
+    padding-left: 12px;
+    margin-left: -15px;
+  }
+
+  .clause-body h2 {
+    font-family: var(--brand);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 0 0 10px;
+    color: var(--text-primary);
+    text-wrap: balance;
+  }
+
+  .clause-body p, .clause-body ul {
+    color: var(--text-secondary);
+    max-width: 65ch;
+  }
+
+  .clause-body p { margin: 0 0 12px; }
+  .clause-body p:last-child { margin-bottom: 0; }
+  .clause-body ul { margin: 0 0 12px; padding-left: 1.15em; }
+  .clause-body ul:last-child { margin-bottom: 0; }
+  .clause-body li { margin-bottom: 6px; }
+  .clause-body strong { color: var(--text-primary); font-weight: 600; }
+
+  table.permissions {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+    margin-top: 4px;
+  }
+
+  table.permissions th, table.permissions td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+    vertical-align: top;
+  }
+
+  table.permissions th {
+    font-family: var(--brand);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  table.permissions td:first-child, table.permissions th:first-child {
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .table-wrap { overflow-x: auto; }
+
+  footer.contact {
+    margin-top: 56px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+  }
+
+  footer.contact .doc-label { margin-bottom: 8px; }
+
+  footer.contact p {
+    color: var(--text-secondary);
+    margin: 0 0 6px;
+  }
+
+  footer.contact a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  footer.contact a:hover { text-decoration: underline; }
+
+  @media (max-width: 460px) {
+    section.clause { grid-template-columns: 30px 1fr; gap: 4px 12px; }
+    .clause-number { font-size: 18px; padding-left: 8px; margin-left: -11px; }
+    body { font-size: 16px; }
+  }
+</style>
+
+<div class="page">
+  <header class="top">
+    <span class="wordmark">Habbit</span>
+    <span class="doc-label">Privacy Policy</span>
+  </header>
+  <div class="effective-date">Effective September 13, 2026</div>
+
+  <h1>Your data stays on your phone.</h1>
+  <p class="intro">
+    Habbit helps you track, reduce, or quit habits like smoking, drinking, and pan masala use &mdash; and build good
+    ones, like studying, fitness, reading, or mindfulness. This page explains exactly what the app does with your
+    information &mdash; in plain language first, then in full.
+  </p>
+
+  <div class="tldr">
+    <span class="doc-label">In short</span>
+    <ul>
+      <li>Everything you log stays in a local database on your device. There is no account, no server, and no cloud sync.</li>
+      <li>Location is only used, on your device, to notice when you're back at a spot tied to a habit you're quitting &mdash; and only if you turn that on.</li>
+      <li>We don't run ads, analytics, or trackers, and we never sell or share your data.</li>
+      <li>You can see, rename, or delete any recorded location, or delete a habit and its history, at any time.</li>
+    </ul>
+  </div>
+
+  <section class="clause">
+    <span class="clause-number">1</span>
+    <div class="clause-body">
+      <h2>Who this policy covers</h2>
+      <p>
+        Habbit is developed by an individual developer, Abhijeet. This policy applies to the Habbit Android app and
+        describes how it handles information when you use it.
+      </p>
+    </div>
+  </section>
+
+  <section class="clause">
+    <span class="clause-number">2</span>
+    <div class="clause-body">
+      <h2>What's stored, and where</h2>
+      <p>
+        Every habit you create &mdash; its name, daily logs, amounts, spending, reflections, microtasks, and reminder
+        times &mdash; is saved in a local SQLite database on your device only. Habbit has no user accounts, no
+        backend server, and no cloud sync of any kind. Nothing you type into the app leaves your phone.
+      </p>
+      <p>
+        Uninstalling the app permanently deletes this database. Deleting a single habit from within the app deletes
+        its history along with it.
+      </p>
+    </div>
+  </section>
+
+  <section class="clause">
+    <span class="clause-number">3</span>
+    <div class="clause-body">
+      <h2>Location: how it actually works</h2>
+      <p>Location tracking is off by default and lives entirely per-habit, in two separate steps you turn on yourself:</p>
+      <ul>
+        <li>
+          <strong>Track smoking locations</strong> &mdash; when you enable this for a habit, tapping the "+" to log an
+          entry also records your device's coordinates at that moment. Habbit compares these points against each
+          other, on your device, to notice spots you visit repeatedly.
+        </li>
+        <li>
+          <strong>Warn me even when the app is closed</strong> &mdash; a second, separate toggle. Turning it on shows
+          you an in-app explanation before Android ever asks for background location permission. Once granted, Habbit
+          uses Android's geofencing system to notice when you arrive at one of your own recorded spots, even with the
+          app fully closed, and shows a local notification.
+        </li>
+      </ul>
+      <p>
+        In both cases, your location is compared only against your own past entries, only on your device. It is never
+        transmitted anywhere, never sent to us or anyone else, and never used for advertising. You can open
+        <strong>Manage recorded locations</strong> from any location-tracked habit at any time to see every spot
+        Habbit has learned, rename it, or delete it &mdash; and you can turn either toggle off whenever you like.
+      </p>
+    </div>
+  </section>
+
+  <section class="clause">
+    <span class="clause-number">4</span>
+    <div class="clause-body">
+      <h2>Notifications</h2>
+      <p>
+        Reminders, nightly summaries, and location-deterrent alerts are all scheduled and shown directly by your
+        phone's operating system. Habbit does not use any push-notification server &mdash; nothing about a
+        notification is sent off your device to make it appear.
+      </p>
+    </div>
+  </section>
+
+  <section class="clause">
+    <span class="clause-number">5</span>
+    <div class="clause-body">
+      <h2>No analytics, ads, or third parties</h2>
+      <p>
+        Habbit contains no analytics software development kit, no advertising network, no crash-reporting service,
+        and no other third-party code that could collect or transmit your data. We do not know how you use the app
+        beyond what you can see yourself, because nothing is reported back to us.
+      </p>
+    </div>
+  </section>
+
+  <section class="clause">
+    <span class="clause-number">6</span>
+    <div class="clause-body">
+      <h2>Sharing and selling</h2>
+      <p>
+        We do not sell, rent, trade, or otherwise share your data with any third party, for any purpose. There is
+        nothing to share &mdash; your data is stored only on your own device, and we have no access to it.
+      </p>
+    </div>
+  </section>
+
+  <section class="clause">
+    <span class="clause-number">7</span>
+    <div class="clause-body">
+      <h2>Permissions Habbit may ask for</h2>
+      <div class="table-wrap">
+        <table class="permissions">
+          <thead>
+            <tr><th>Permission</th><th>Why</th><th>Required?</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Location (foreground)</td>
+              <td>To record a habit's location when you log an entry, if you've turned that on</td>
+              <td>Optional, per habit</td>
+            </tr>
+            <tr>
+              <td>Location (background)</td>
+              <td>To detect a recorded spot while the app is closed, if you've turned that on</td>
+              <td>Optional, per habit</td>
+            </tr>
+            <tr>
+              <td>Notifications</td>
+              <td>To show reminders, nightly summaries, and location alerts</td>
+              <td>Optional</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="clause">
+    <span class="clause-number">8</span>
+    <div class="clause-body">
+      <h2>Children's privacy</h2>
+      <p>
+        Habbit is not directed at children under 13, and we do not knowingly collect information from children.
+      </p>
+    </div>
+  </section>
+
+  <section class="clause">
+    <span class="clause-number">9</span>
+    <div class="clause-body">
+      <h2>Your choices</h2>
+      <ul>
+        <li>Turn location tracking, background detection, or reminders off per habit, at any time.</li>
+        <li>View, rename, or delete any recorded location from that habit's "Manage recorded locations" screen.</li>
+        <li>Delete a habit to remove its full history.</li>
+        <li>Uninstall the app to permanently remove all data Habbit has stored.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="clause">
+    <span class="clause-number">10</span>
+    <div class="clause-body">
+      <h2>Changes to this policy</h2>
+      <p>
+        If this policy changes, the effective date at the top of this page will be updated, and any change that
+        materially affects how your data is handled will also be noted in-app.
+      </p>
+    </div>
+  </section>
+
+  <footer class="contact">
+    <span class="doc-label">Questions?</span>
+    <p>If anything here is unclear, or you have a question about your data, reach out directly.</p>
+    <p><a href="mailto:abhijeetkarna123@gmail.com">abhijeetkarna123@gmail.com</a></p>
+  </footer>
+</div>

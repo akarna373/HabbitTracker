@@ -9,7 +9,7 @@ import { formatTime12h } from "../../lib/progress";
 import { useDraftStore } from "../../lib/draftStore";
 import { useStore } from "../../lib/store";
 import { colors, spacing, typography } from "../../lib/theme";
-import { URGE_MICROTASKS } from "../../lib/templates";
+import { QUIT_TEMPLATES, URGE_MICROTASKS } from "../../lib/templates";
 
 function frequencySummary(frequencyType: string, repeatDays: number[]): string {
   if (frequencyType === "daily") return "Every day";
@@ -26,7 +26,8 @@ export default function MicrotasksScreen() {
 
   useEffect(() => {
     if (draft.hasCost && tasks.length === 0) {
-      setTasks(URGE_MICROTASKS);
+      const template = QUIT_TEMPLATES.find((t) => t.id === draft.templateId);
+      setTasks(template?.urgeMicrotasks ?? URGE_MICROTASKS);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -92,6 +93,8 @@ export default function MicrotasksScreen() {
                 onChangeText={(t) => updateTask(index, t)}
                 placeholder="Describe the small step"
                 placeholderTextColor={colors.textMuted}
+                multiline
+                textAlignVertical="top"
               />
               <Pressable onPress={() => removeTask(index)} hitSlop={8}>
                 <Text style={styles.removeText}>✕</Text>
@@ -130,10 +133,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   label: { ...typography.label, marginTop: spacing.sm, marginBottom: spacing.xs },
-  taskRow: { flexDirection: "row", alignItems: "center", marginBottom: spacing.xs, gap: spacing.xs },
-  taskIndex: { ...typography.caption, width: 18 },
-  taskInput: { ...typography.body, flex: 1 },
-  removeText: { color: colors.textMuted, fontSize: 16 },
+  taskRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: spacing.xs, gap: spacing.xs },
+  taskIndex: { ...typography.caption, width: 18, marginTop: 2 },
+  taskInput: { ...typography.body, flex: 1, paddingTop: 0 },
+  removeText: { color: colors.textMuted, fontSize: 16, marginTop: 2 },
   addRow: { marginTop: spacing.xs },
   addText: { color: colors.accentPink, fontWeight: "600" },
   summaryTitle: { ...typography.body, fontWeight: "700", marginBottom: 2 },

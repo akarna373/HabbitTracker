@@ -6,7 +6,7 @@ import { Card } from "../../components/Card";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenHeader } from "../../components/ScreenHeader";
 import { ThemedTimePicker } from "../../components/ThemedTimePicker";
-import { getCurrencySymbol } from "../../lib/currency";
+import { getAlcoholUnitSuggestions, getCurrencySymbol } from "../../lib/currency";
 import { useDraftStore } from "../../lib/draftStore";
 import { GOAL_OPTIONS } from "../../lib/goals";
 import { formatTime12h } from "../../lib/progress";
@@ -15,6 +15,8 @@ import { colors, spacing, typography } from "../../lib/theme";
 export default function SmokingSetupScreen() {
   const draft = useDraftStore();
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const isAlcohol = draft.templateId === "alcohol";
+  const unitSuggestions = isAlcohol ? getAlcoholUnitSuggestions() : [];
 
   const canContinue =
     draft.baselineQuantity !== null &&
@@ -28,6 +30,32 @@ export default function SmokingSetupScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScreenHeader title={draft.name || "Quit habit setup"} subtitle="Quit habit setup" />
       <ScrollView contentContainerStyle={styles.content}>
+        {isAlcohol ? (
+          <>
+            <Text style={styles.label}>UNIT</Text>
+            <View style={styles.unitChipRow}>
+              {unitSuggestions.map((u) => (
+                <Text
+                  key={u}
+                  style={[styles.unitChip, draft.unit === u && styles.unitChipSelected]}
+                  onPress={() => draft.set({ unit: u })}
+                >
+                  {u}
+                </Text>
+              ))}
+            </View>
+            <Card>
+              <TextInput
+                style={styles.input}
+                placeholder="Or type your own unit"
+                placeholderTextColor={colors.textMuted}
+                value={draft.unit ?? ""}
+                onChangeText={(t) => draft.set({ unit: t })}
+              />
+            </Card>
+          </>
+        ) : null}
+
         <Text style={styles.label}>BASELINE QUANTITY ({draft.unit ?? "units"} per day)</Text>
         <Card>
           <TextInput
@@ -43,7 +71,7 @@ export default function SmokingSetupScreen() {
           />
         </Card>
 
-        <Text style={styles.label}>PRICE PER ITEM ({getCurrencySymbol()})</Text>
+        <Text style={styles.label}>PRICE PER {(draft.unit || "ITEM").toUpperCase()} ({getCurrencySymbol()})</Text>
         <Card>
           <TextInput
             style={styles.input}
@@ -124,4 +152,19 @@ const styles = StyleSheet.create({
   },
   reduceDaysLabel: { ...typography.caption, marginBottom: spacing.xs },
   reduceDaysInput: { ...typography.body, paddingVertical: 4 },
+  unitChipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.sm },
+  unitChip: {
+    ...typography.body,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 20,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    color: colors.textSecondary,
+  },
+  unitChipSelected: {
+    borderColor: colors.accentPink,
+    color: colors.accentPink,
+    fontWeight: "700",
+  },
 });

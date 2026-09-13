@@ -19,3 +19,17 @@ export function getCurrencySymbol(): string {
 export function formatMoney(amount: number): string {
   return `${getCurrencySymbol()} ${amount.toFixed(0)}`;
 }
+
+// Alcohol has no universal serving unit (unlike a cigarette) - South Asia
+// commonly measures by bottle fraction (quarter/half/full), most other
+// regions by serving type. Quick-pick suggestions only - the user can still
+// type anything else into the unit field.
+export function getAlcoholUnitSuggestions(): string[] {
+  try {
+    const region = Localization.getLocales()[0]?.regionCode;
+    if (region === "NP" || region === "IN") return ["Quarter", "Half", "Full"];
+  } catch {
+    // fall through to default suggestions
+  }
+  return ["Shot", "Can", "Glass", "Bottle"];
+}

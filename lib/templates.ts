@@ -191,14 +191,64 @@ export interface QuitTemplate {
   defaultPricePerItem: number;
   iconSet: IconSet;
   icon: string;
+  // Overrides the generic URGE_MICROTASKS default with wording specific to
+  // this habit, shown as the "when an urge appears" steps during setup.
+  urgeMicrotasks?: string[];
+  // Habit-specific copy for the detail/motivate/summary screens - falls back
+  // to the smoking wording (see getQuitCopy) when omitted, so scrolling and
+  // any custom quit habit still read sensibly without extra work.
+  verb?: string; // "You {verb} 2 less than yesterday"
+  daysLabel?: string; // "{n} {daysLabel}" this week
+  motivateSubtitle?: string;
 }
 
 export const QUIT_TEMPLATES: QuitTemplate[] = [
   { id: "smoking", name: "Smoking cigarettes", description: "Track quantity, cost and smoke-free days", unit: "sticks", hasCost: true, defaultBaselineQuantity: 5, defaultPricePerItem: 20, iconSet: "material", icon: "smoking-off" },
-  { id: "alcohol", name: "Drinking alcohol", description: "Track drinks, spending and sober days", unit: "drinks", hasCost: true, defaultBaselineQuantity: 2, defaultPricePerItem: 150, iconSet: "ionicons", icon: "wine-outline" },
-  { id: "panmasala", name: "Chewing pan masala", description: "Example: Rajnigandha; track packets and cost", unit: "packets", hasCost: true, defaultBaselineQuantity: 3, defaultPricePerItem: 10, iconSet: "material", icon: "tooth-outline" },
+  {
+    id: "alcohol",
+    name: "Drinking alcohol",
+    description: "Track drinks, spending and sober days",
+    unit: "drinks",
+    hasCost: true,
+    defaultBaselineQuantity: 2,
+    defaultPricePerItem: 150,
+    iconSet: "ionicons",
+    icon: "wine-outline",
+    urgeMicrotasks: ["Drink a glass of water first", "Step outside or change rooms", "Open the app and press Motivate me"],
+    verb: "drank",
+    daysLabel: "sober days",
+    motivateSubtitle: "Before you pour one, read this.",
+  },
+  {
+    id: "panmasala",
+    name: "Chewing pan masala",
+    description: "Example: Rajnigandha; track packets and cost",
+    unit: "packets",
+    hasCost: true,
+    defaultBaselineQuantity: 3,
+    defaultPricePerItem: 10,
+    iconSet: "material",
+    icon: "tooth-outline",
+    urgeMicrotasks: ["Rinse your mouth with water", "Chew gum or saunf instead", "Step away for a few minutes"],
+    verb: "chewed",
+    daysLabel: "chew-free days",
+    motivateSubtitle: "Before you chew one, read this.",
+  },
   { id: "scrolling", name: "Reduce scrolling", description: "Track time and urge alternatives", unit: "minutes", hasCost: false, defaultBaselineQuantity: 60, defaultPricePerItem: 0, iconSet: "ionicons", icon: "phone-portrait-outline" },
 ];
+
+const DEFAULT_QUIT_COPY = { verb: "smoked", daysLabel: "smoke-free days", motivateSubtitle: "Before you light up, read this." };
+
+// Central lookup so the detail/motivate/summary screens all read the same
+// habit-specific wording instead of each hardcoding smoking's terms.
+export function getQuitCopy(templateId?: string | null): { verb: string; daysLabel: string; motivateSubtitle: string } {
+  const template = QUIT_TEMPLATES.find((t) => t.id === templateId);
+  return {
+    verb: template?.verb ?? DEFAULT_QUIT_COPY.verb,
+    daysLabel: template?.daysLabel ?? DEFAULT_QUIT_COPY.daysLabel,
+    motivateSubtitle: template?.motivateSubtitle ?? DEFAULT_QUIT_COPY.motivateSubtitle,
+  };
+}
 
 export const CUSTOM_QUIT_TEMPLATE_ID = "custom-quit";
 
