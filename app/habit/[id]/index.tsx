@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../../components/Card";
 import { confirmDialog } from "../../../components/ConfirmDialog";
@@ -8,9 +8,11 @@ import { Counter } from "../../../components/Counter";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { ProgressBar } from "../../../components/ProgressBar";
 import { ScreenHeader } from "../../../components/ScreenHeader";
+import { ThemedSwitch } from "../../../components/ThemedSwitch";
 import { formatMoney } from "../../../lib/currency";
 import { todayISO } from "../../../lib/dates";
 import { ensureLocationPermission, findHotspots, getCurrentLocation, nearestHotspot } from "../../../lib/location";
+import { scheduleImmediateNotification } from "../../../lib/notifications";
 import { baselineCost, computeStreak, costForAmount, reduceCycleDay, reduceDailyTarget, REDUCE_CYCLE_DAYS } from "../../../lib/progress";
 import { selectLogForDate, useStore } from "../../../lib/store";
 import { colors, spacing, typography } from "../../../lib/theme";
@@ -37,7 +39,11 @@ export default function HabitDetailScreen() {
   const today = todayISO();
   const log = selectLogForDate(logs, today);
   const [reflection, setReflection] = useState(log?.reflection ?? "");
-  const [nearHotspot, setNearHotspot] = useState(false);
+  // Mirrors habit.locationTrackingEnabled but flips the instant the user
+  // taps, instead of waiting on the permission prompt + DB write - without
+  // this the Switch (fully controlled by the store) stalls visibly before
+  // moving.
+  const [trackingUiValue, setTrackingUiValue] = useState(habit?.locationTrackingEnabled ?? false);
 
   useEffect(() => {
     setReflection(log?.reflection ?? "");
@@ -50,16 +56,26 @@ export default function HabitDetailScreen() {
   }, [habit]);
 
   useEffect(() => {
-    if (!habit?.locationTrackingEnabled) {
-      setNearHotspot(false);
-      return;
-    }
+    setTrackingUiValue(habit?.locationTrackingEnabled ?? false);
+  }, [habit?.locationTrackingEnabled]);
+
+  useEffect(() => {
+    if (!habit?.locationTrackingEnabled) return;
     let cancelled = false;
     (async () => {
       const current = await getCurrentLocation();
       if (!current || cancelled) return;
       const hotspots = findHotspots(smokeLocations ?? []);
-      setNearHotspot(nearestHotspot(current, hotspots) !== null);
+      if (nearestHotspot(current, hotspots) !== null) {
+        // A passive in-screen card read as encouragement to just go smoke
+        // somewhere else - a real push notification is the actual deterrent,
+        // since it can reach the user the moment they're at the spot, not
+        // only if they happen to have this screen open already.
+        scheduleImmediateNotification(
+          "You're at your smoking location",
+          "Please move away from this spot - it's better for your health and your finances."
+        );
+      }
     })();
     return () => {
       cancelled = true;
@@ -72,9 +88,11 @@ export default function HabitDetailScreen() {
   const streak = computeStreak(habit, logs);
 
   const toggleLocationTracking = async (value: boolean) => {
+    setTrackingUiValue(value);
     if (value) {
       const granted = await ensureLocationPermission();
       if (!granted) {
+        setTrackingUiValue(false);
         confirmDialog(
           "Location permission needed",
           "To warn you at places you usually smoke, allow this app to access your location.",
@@ -126,13 +144,6 @@ export default function HabitDetailScreen() {
             <Text style={styles.tagText}>{isReduce ? `DAY ${day} OF ${REDUCE_CYCLE_DAYS}` : "QUIT A HABIT"}</Text>
           </View>
 
-          {nearHotspot ? (
-            <Card highlighted>
-              <Text style={styles.cardTitle}>You're at a place you usually smoke</Text>
-              <Text style={styles.cardCaption}>Try moving somewhere else before you light up.</Text>
-            </Card>
-          ) : null}
-
           <Counter
             value={amount}
             unit={`${habit.unit ?? ""} today`}
@@ -151,33 +162,16 @@ export default function HabitDetailScreen() {
             </Text>
           </Card>
 
-          {microtasks.length > 0 ? (
-            <Card>
-              <Text style={styles.cardTitle}>When an urge appears</Text>
-              {microtasks.map((m) => (
-                <Text
-                  key={m.id}
-                  style={styles.cardBody}
-                  onLongPress={() => confirmDeleteMicrotask(m.id, m.text)}
-                >
-                  {m.text}
-                </Text>
-              ))}
-            </Card>
-          ) : null}
+          <PrimaryButton title="Motivate me" onPress={() => router.push(`/habit/${habit.id}/motivate`)} />
 
           <Card>
             <View style={styles.row}>
               <View style={styles.rowTextCol}>
                 <Text style={styles.cardTitle}>Track smoking locations</Text>
                 <Text style={styles.cardCaption}>Get warned when you're at a place you usually smoke</Text>
+                <Text style={styles.cardCaption}>Log as you smoke, not in bulk later - bulk logs record the wrong spot</Text>
               </View>
-              <Switch
-                value={habit.locationTrackingEnabled}
-                onValueChange={toggleLocationTracking}
-                trackColor={{ false: colors.border, true: colors.accentPink }}
-                thumbColor={colors.textPrimary}
-              />
+              <ThemedSwitch value={trackingUiValue} onValueChange={toggleLocationTracking} />
             </View>
           </Card>
 
@@ -188,7 +182,7 @@ export default function HabitDetailScreen() {
             onPress={() => incrementAmount(habit.id, today, 0)}
           />
 
-          <PrimaryButton title="View tonight's summary" variant="outline" onPress={() => router.push(`/habit/${habit.id}/summary`)} />
+          <PrimaryButton title="Today's summary" variant="outline" onPress={() => router.push(`/habit/${habit.id}/summary`)} />
           <PrimaryButton title="Delete habit" variant="outline" onPress={confirmDelete} />
         </ScrollView>
       </SafeAreaView>

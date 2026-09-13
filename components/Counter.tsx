@@ -33,16 +33,16 @@ export function Counter({ value, unit, onDecrement, onIncrement, minusDisabled }
 const styles = StyleSheet.create({
   value: { fontSize: 56, fontWeight: "700", color: colors.textPrimary, textAlign: "center" },
   unit: { fontSize: 14, color: colors.textSecondary, textAlign: "center", marginBottom: spacing.md },
-  buttonRow: { flexDirection: "row", justifyContent: "center", gap: spacing.lg },
+  buttonRow: { flexDirection: "row", justifyContent: "center", gap: spacing.lg, marginBottom: spacing.md },
   circleButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 1,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
     borderColor: colors.accentPink,
     alignItems: "center",
     justifyContent: "center",
   },
   disabled: { opacity: 0.4 },
-  circleText: { fontSize: 26, color: colors.accentPink, fontWeight: "700" },
+  circleText: { fontSize: 20, color: colors.accentPink, fontWeight: "700" },
 });

@@ -55,6 +55,15 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
           loggedAt TEXT NOT NULL
         );
       `);
+      // CREATE TABLE IF NOT EXISTS never alters an already-existing table,
+      // so a habits table created before locationTrackingEnabled existed is
+      // missing the column - add it, ignoring the "duplicate column" error
+      // on every install that already has it (fresh installs included).
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN locationTrackingEnabled INTEGER NOT NULL DEFAULT 0;");
+      } catch {
+        // column already exists
+      }
       return db;
     });
   }

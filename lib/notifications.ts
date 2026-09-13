@@ -65,6 +65,18 @@ export function computeNextOccurrence(time: string): Date {
   return next;
 }
 
+// Fires as close to immediately as the OS allows (trigger: null) - used for
+// the smoking-hotspot deterrence alert, not a scheduled reminder.
+export async function scheduleImmediateNotification(title: string, body: string): Promise<void> {
+  if (!Notifications) return;
+  const granted = await ensureNotificationPermission();
+  if (!granted) return;
+  await Notifications.scheduleNotificationAsync({
+    content: { title, body },
+    trigger: null,
+  });
+}
+
 // A DAILY trigger repeats the same fixed content forever - a habit whose
 // notification text needs to change day to day (e.g. a declining target)
 // has to be rescheduled as a fresh one-time notification instead.
