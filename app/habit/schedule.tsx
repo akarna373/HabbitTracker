@@ -5,9 +5,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenHeader } from "../../components/ScreenHeader";
+import { StartDatePickerModal } from "../../components/StartDatePickerModal";
 import { ThemedTimePicker } from "../../components/ThemedTimePicker";
+import { todayISO } from "../../lib/dates";
+import { formatLongDateForCalendar } from "../../lib/calendarSettings";
 import { useDraftStore } from "../../lib/draftStore";
 import { formatTime12h } from "../../lib/progress";
+import { useStore } from "../../lib/store";
 import { colors, spacing, typography } from "../../lib/theme";
 
 // repeatDays stays Monday-first (0=Mon..6=Sun) to match the app-wide
@@ -20,7 +24,10 @@ const WEEKDAYS = [0, 1, 2, 3, 4];
 
 export default function ScheduleScreen() {
   const draft = useDraftStore();
+  const calendarType = useStore((s) => s.calendarType);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const isMedication = draft.templateId === "medication";
 
   const toggleDay = (day: number) => {
     const has = draft.repeatDays.includes(day);
@@ -39,7 +46,7 @@ export default function ScheduleScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScreenHeader title="Find your rhythm" subtitle="New habit - Step 2 of 3" />
+      <ScreenHeader title={isMedication ? "Set your Reminder" : "Find your rhythm"} subtitle="New habit - Step 2 of 3" />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.label}>REPEAT ON</Text>
         <View style={styles.dayRow}>
@@ -66,24 +73,43 @@ export default function ScheduleScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.label}>REMINDER</Text>
-        <Card
-          onPress={() => draft.set({ reminderEnabled: !draft.reminderEnabled })}
-          highlighted={draft.reminderEnabled}
-        >
-          <Text style={styles.reminderTitle}>Reminder</Text>
-          <Text style={styles.reminderCaption}>
-            {draft.reminderEnabled ? "On - gentle notification" : "Off"}
-          </Text>
-          <Text style={styles.reminderCaption}>Can be changed or disabled anytime</Text>
-        </Card>
-
-        {draft.reminderEnabled ? (
+        {!isMedication ? (
           <>
-            <Text style={styles.label}>REMINDER TIME</Text>
+            <Text style={styles.label}>REMINDER</Text>
+            <Card
+              onPress={() => draft.set({ reminderEnabled: !draft.reminderEnabled })}
+              highlighted={draft.reminderEnabled}
+            >
+              <Text style={styles.reminderTitle}>Reminder</Text>
+              <Text style={styles.reminderCaption}>
+                {draft.reminderEnabled ? "On - gentle notification" : "Off"}
+              </Text>
+              <Text style={styles.reminderCaption}>Can be changed or disabled anytime</Text>
+            </Card>
+          </>
+        ) : null}
+
+        {draft.reminderEnabled || isMedication ? (
+          <>
+            <Text style={styles.label}>{isMedication ? "FIRST DOSE TIME" : "REMINDER TIME"}</Text>
             <Card onPress={() => setShowTimePicker(true)}>
               <Text style={styles.input}>{formatTime12h(draft.reminderTime ?? "20:30")}</Text>
             </Card>
+            {isMedication ? (
+              <Text style={styles.reminderCaption}>
+                Other doses are spaced evenly from here, based on how often you take it.
+              </Text>
+            ) : null}
+
+            {isMedication ? (
+              <>
+                <Text style={styles.label}>START DATE</Text>
+                <Card onPress={() => setShowCalendar(true)}>
+                  <Text style={styles.input}>{formatLongDateForCalendar(draft.startDate ?? todayISO(), calendarType)}</Text>
+                </Card>
+              </>
+            ) : null}
+
             <ThemedTimePicker
               visible={showTimePicker}
               value={draft.reminderTime ?? "20:30"}
@@ -100,6 +126,18 @@ export default function ScheduleScreen() {
         <View style={{ height: spacing.md }} />
         <PrimaryButton title="Continue" disabled={!canContinue} onPress={() => router.push("/habit/microtasks")} />
       </ScrollView>
+
+      <StartDatePickerModal
+        visible={showCalendar}
+        calendarType={calendarType}
+        onClose={() => setShowCalendar(false)}
+        onPick={(date) => draft.set({ startDate: date })}
+        previewParams={{
+          dosageFrequency: draft.dosageFrequency,
+          durationType: draft.durationType,
+          startTime: draft.reminderTime ?? "08:00",
+        }}
+      />
     </SafeAreaView>
   );
 }

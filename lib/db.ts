@@ -44,6 +44,7 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
           habitId TEXT NOT NULL,
           date TEXT NOT NULL,
           amount REAL NOT NULL DEFAULT 0,
+          amountB REAL,
           microtasksDone TEXT NOT NULL DEFAULT '[]',
           reflection TEXT,
           UNIQUE(habitId, date)
@@ -72,6 +73,96 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
       }
       try {
         await db.execAsync("ALTER TABLE habits ADD COLUMN reduceDays INTEGER;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN attendedCount INTEGER;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN heldCount INTEGER;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN attendanceTarget REAL;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN examDate TEXT;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN checkupIntervalDays INTEGER;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE daily_logs ADD COLUMN amountB REAL;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN doseAmount REAL;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN doseUnit TEXT;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN dosageFrequency TEXT;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN durationType TEXT;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN medicineCategory TEXT;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN medicationNotificationIds TEXT;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN tabletsPerPacket INTEGER;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN stockRemaining INTEGER;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN lowStockNotifiedAt TEXT;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN medicationStartDate TEXT;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN totalTabletsBought INTEGER;");
+      } catch {
+        // column already exists
+      }
+      try {
+        await db.execAsync("ALTER TABLE habits ADD COLUMN pillColor TEXT;");
       } catch {
         // column already exists
       }

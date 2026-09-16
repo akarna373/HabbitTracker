@@ -44,6 +44,11 @@ export default function SettingsScreen() {
         <ListRow title="Appearance" subtitle="Follow device - dark mode shown" showChevron={false} />
         <ListRow title="Notifications" subtitle="Set per-habit reminders when creating a habit" showChevron={false} />
         <ListRow title="Language" subtitle="System language - multilingual ready" showChevron={false} />
+        <ListRow
+          title="Calendar"
+          subtitle="Gregorian or Bikram Sambat"
+          onPress={() => router.push("/calendar-settings")}
+        />
         <ListRow title="Partner sharing" subtitle="Off - coming in a future release" disabled showChevron={false} />
         <ListRow title="Health Connect" subtitle="Not connected - coming in a future release" disabled showChevron={false} />
         <ListRow

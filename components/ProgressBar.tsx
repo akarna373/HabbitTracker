@@ -1,15 +1,16 @@
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, ViewStyle } from "react-native";
 import { colors } from "../lib/theme";
 
 interface ProgressBarProps {
   progress: number; // 0..1
   color?: string;
+  style?: ViewStyle;
 }
 
-export function ProgressBar({ progress, color = colors.accentPink }: ProgressBarProps) {
+export function ProgressBar({ progress, color = colors.accentPink, style }: ProgressBarProps) {
   const pct = Math.max(0, Math.min(1, progress));
   return (
-    <View style={styles.track}>
+    <View style={[styles.track, style]}>
       <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: color }]} />
     </View>
   );

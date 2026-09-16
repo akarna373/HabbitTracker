@@ -14,22 +14,29 @@ export default function FitnessTemplatesScreen() {
   const set = useDraftStore((s) => s.set);
   const habits = useStore((s) => s.habits);
   // Avoid duplicates: a template already used for an existing fitness habit
-  // can't be picked again. Filtered by category, not kind, since Fitness
-  // shares kind "good" with the Build-good-habits and Projects categories.
-  const usedTemplateIds = new Set(habits.filter((h) => h.category === "personal_goal").map((h) => h.templateId));
+  // can't be picked again. "personal_goal" is the older category id the
+  // onboarding focus-setup chip still uses for this same screen.
+  const usedTemplateIds = new Set(
+    habits.filter((h) => h.category === "fitness" || h.category === "personal_goal").map((h) => h.templateId)
+  );
 
   const chooseTemplate = (templateId: string) => {
     const template = FITNESS_TEMPLATES.find((t) => t.id === templateId);
     if (!template) return;
+    // The morning-walk reminder is the whole point of this template - start
+    // the user with it already on, at a sensible morning time, instead of
+    // the generic 8:30 PM default they'd otherwise have to notice and fix.
+    const isWalking = template.id === "walking_jogging";
     set({
       templateId: template.id,
       name: template.name,
-      trackingMethod: "amount",
+      trackingMethod: template.trackingMethod ?? "amount",
       targetAmount: null,
       suggestedTargetAmount: template.targetAmount,
       unit: template.unit,
       microtasks: template.microtasks,
       hasCost: false,
+      ...(isWalking ? { reminderEnabled: true, reminderTime: "08:00" } : null),
     });
     router.push("/habit/basics");
   };

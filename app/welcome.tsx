@@ -5,6 +5,8 @@ import { BrandMark } from "../components/BrandMark";
 import { GoogleGIcon } from "../components/GoogleGIcon";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { SocialButton } from "../components/SocialButton";
+import { useDraftStore } from "../lib/draftStore";
+import { HEALTH_TEMPLATES } from "../lib/templates";
 import { colors, spacing, typography } from "../lib/theme";
 
 export default function WelcomeScreen() {
@@ -15,11 +17,37 @@ export default function WelcomeScreen() {
   };
 
   // TODO: wire up real Google auth later. Until then this is a dev shortcut
-  // that skips the finished profile-setup screen and jumps straight to
-  // focus-setup, the screen currently being worked on - swap for the real
-  // sign-in call when ready.
+  // that skips the finished profile-setup/categories/health-templates chain
+  // and jumps straight into the Medication setup screen (the screen
+  // currently being worked on) with the template pre-selected, exactly like
+  // health-templates.tsx's own chooseTemplate("medication") would - swap for
+  // the real sign-in call when ready.
   const continueWithGoogle = () => {
-    router.push("/focus-setup");
+    const template = HEALTH_TEMPLATES.find((t) => t.id === "medication")!;
+    const draft = useDraftStore.getState();
+    draft.reset();
+    draft.set({
+      kind: "good",
+      category: "health",
+      templateId: template.id,
+      name: "",
+      trackingMethod: template.trackingMethod ?? "amount",
+      targetAmount: null,
+      suggestedTargetAmount: template.targetAmount,
+      unit: template.unit,
+      microtasks: template.microtasks,
+      hasCost: !!template.hasCost,
+      pricePerItem: null,
+      suggestedPricePerItem: template.defaultPricePerItem ?? null,
+      doseAmount: null,
+      doseUnit: null,
+      dosageFrequency: null,
+      durationType: null,
+      medicineCategory: null,
+      reminderEnabled: true,
+      reminderTime: "08:00",
+    });
+    router.push("/habit/basics");
   };
 
   return (

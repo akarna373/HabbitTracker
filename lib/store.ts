@@ -4,9 +4,20 @@ import { genId } from "./id";
 import { todayISO } from "./dates";
 import { getCurrentLocation } from "./location";
 import { syncGeofences } from "./geofencing";
-import { cancelNotification, computeNextOccurrence, scheduleDailyNotification, scheduleOneTimeNotification } from "./notifications";
+import {
+  adjustStock,
+  cancelNotification,
+  computeNextOccurrence,
+  scheduleDailyNotification,
+  scheduleIntervalReminder,
+  scheduleMorningWalkReminder,
+  scheduleOneTimeNotification,
+} from "./notifications";
+import { cancelMedicationNotifications, scheduleMedicationNotifications } from "./medicationSchedule";
+import { parseDosageFrequency } from "./medicationParse";
 import { reduceCycleDay, reduceDailyTarget, REDUCE_CYCLE_DAYS } from "./progress";
 import { getSwipeSettings, saveSwipeSettings, type SwipeSettings } from "./swipeSettings";
+import { getCalendarType, saveCalendarType, type CalendarType } from "./calendarSettings";
 import type { DailyLog, GoalType, Habit, Microtask, NewHabitDraft, SmokeLocation } from "./types";
 
 interface HabitRow {
@@ -33,6 +44,23 @@ interface HabitRow {
   summaryNotificationId: string | null;
   locationTrackingEnabled: number;
   backgroundLocationEnabled: number;
+  attendedCount: number | null;
+  heldCount: number | null;
+  attendanceTarget: number | null;
+  examDate: string | null;
+  checkupIntervalDays: number | null;
+  doseAmount: number | null;
+  doseUnit: string | null;
+  dosageFrequency: string | null;
+  durationType: string | null;
+  medicineCategory: string | null;
+  medicationNotificationIds: string | null;
+  tabletsPerPacket: number | null;
+  stockRemaining: number | null;
+  lowStockNotifiedAt: string | null;
+  medicationStartDate: string | null;
+  totalTabletsBought: number | null;
+  pillColor: string | null;
   createdAt: string;
   archivedAt: string | null;
 }
@@ -49,6 +77,7 @@ function rowToHabit(row: HabitRow): Habit {
     hasCost: !!row.hasCost,
     locationTrackingEnabled: !!row.locationTrackingEnabled,
     backgroundLocationEnabled: !!row.backgroundLocationEnabled,
+    medicationNotificationIds: row.medicationNotificationIds ? JSON.parse(row.medicationNotificationIds) : null,
   };
 }
 
@@ -57,6 +86,7 @@ interface LogRow {
   habitId: string;
   date: string;
   amount: number;
+  amountB: number | null;
   microtasksDone: string;
   reflection: string | null;
 }
@@ -74,12 +104,18 @@ interface StoreState {
   smokeLocationsByHabit: Record<string, SmokeLocation[]>;
   swipeSettings: SwipeSettings;
   setSwipeSettings: (settings: Partial<SwipeSettings>) => Promise<void>;
+  calendarType: CalendarType;
+  setCalendarType: (type: CalendarType) => Promise<void>;
   init: () => Promise<void>;
   createHabit: (draft: NewHabitDraft) => Promise<string>;
   deleteHabit: (habitId: string) => Promise<void>;
   archiveHabit: (habitId: string) => Promise<void>;
   restoreHabit: (habitId: string) => Promise<void>;
   incrementAmount: (habitId: string, date: string, delta: number) => Promise<void>;
+  confirmRestock: (habitId: string, quantity: number) => Promise<void>;
+  setExactStock: (habitId: string, exactAmount: number) => Promise<void>;
+  setPillColor: (habitId: string, color: string) => Promise<void>;
+  updateMedicationSchedule: (habitId: string, changes: { dosageFrequency?: string; medicationStartDate?: string }) => Promise<void>;
   setGoalType: (habitId: string, goalType: GoalType, reduceDays: number | null) => Promise<void>;
   toggleMicrotask: (habitId: string, date: string, microtaskId: string) => Promise<void>;
   deleteMicrotask: (habitId: string, microtaskId: string) => Promise<void>;
@@ -88,6 +124,9 @@ interface StoreState {
   setLocationTracking: (habitId: string, enabled: boolean) => Promise<void>;
   setBackgroundLocationTracking: (habitId: string, enabled: boolean) => Promise<void>;
   deleteSmokeLocations: (habitId: string, ids: string[]) => Promise<void>;
+  logDualMetric: (habitId: string, date: string, amountA: number, amountB: number) => Promise<void>;
+  logAttendance: (habitId: string, attended: boolean) => Promise<void>;
+  addMicrotasks: (habitId: string, texts: string[]) => Promise<void>;
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -98,6 +137,7 @@ export const useStore = create<StoreState>((set, get) => ({
   logsByHabit: {},
   smokeLocationsByHabit: {},
   swipeSettings: { deleteEnabled: true, archiveEnabled: true },
+  calendarType: "gregorian",
 
   setSwipeSettings: async (partial) => {
     const next = { ...get().swipeSettings, ...partial };
@@ -105,9 +145,15 @@ export const useStore = create<StoreState>((set, get) => ({
     set({ swipeSettings: next });
   },
 
+  setCalendarType: async (type) => {
+    await saveCalendarType(type);
+    set({ calendarType: type });
+  },
+
   init: async () => {
     const db = await getDb();
     const swipeSettings = await getSwipeSettings();
+    const calendarType = await getCalendarType();
     const habitRows = await db.getAllAsync<HabitRow>(
       "SELECT * FROM habits WHERE archivedAt IS NULL ORDER BY createdAt ASC"
     );
@@ -161,7 +207,7 @@ export const useStore = create<StoreState>((set, get) => ({
       habits[i] = { ...habit, summaryNotificationId };
     }
 
-    set({ ready: true, habits, archivedHabits, microtasksByHabit, logsByHabit, smokeLocationsByHabit, swipeSettings });
+    set({ ready: true, habits, archivedHabits, microtasksByHabit, logsByHabit, smokeLocationsByHabit, swipeSettings, calendarType });
 
     // Android clears registered geofences on reboot, so re-register on every
     // app open - same defensive pattern as the notification reschedule above.
@@ -173,13 +219,36 @@ export const useStore = create<StoreState>((set, get) => ({
     const id = genId();
     const now = new Date().toISOString();
 
+    // Medication's setup screen never asks for a daily target (its own
+    // amount/count section is hidden) - without this, targetAmount stays
+    // null and isHabitCompleteOn compares against Infinity, so the habit
+    // could never show a completed day or a streak.
+    const targetAmount = draft.templateId === "medication" ? parseDosageFrequency(draft.dosageFrequency) : draft.targetAmount;
+
     let reminderNotificationId: string | null = null;
-    if (draft.reminderEnabled && draft.reminderTime) {
-      reminderNotificationId = await scheduleDailyNotification(
-        draft.name,
-        "A gentle reminder to check in today.",
-        draft.reminderTime
+    let medicationNotificationIds: string[] | null = null;
+    if (draft.templateId === "medication") {
+      medicationNotificationIds = await scheduleMedicationNotifications({
+        habitId: id,
+        name: draft.name,
+        doseAmount: draft.doseAmount,
+        doseUnit: draft.doseUnit,
+        dosageFrequency: draft.dosageFrequency,
+        durationType: draft.durationType,
+        startTime: draft.reminderTime ?? "08:00",
+        startDate: draft.startDate ?? todayISO(),
+      });
+    } else if (draft.templateId === "doctor_checkup" && draft.checkupIntervalDays) {
+      reminderNotificationId = await scheduleIntervalReminder(
+        "Time for a checkup",
+        `It's been a while - book your ${draft.name.toLowerCase()}.`,
+        draft.checkupIntervalDays * 24 * 60 * 60
       );
+    } else if (draft.reminderEnabled && draft.reminderTime) {
+      reminderNotificationId =
+        draft.templateId === "walking_jogging"
+          ? await scheduleMorningWalkReminder(id, draft.reminderTime)
+          : await scheduleDailyNotification(draft.name, "A gentle reminder to check in today.", draft.reminderTime);
     }
 
     let summaryNotificationId: string | null = null;
@@ -209,8 +278,11 @@ export const useStore = create<StoreState>((set, get) => ({
         id, kind, category, templateId, name, trackingMethod, targetAmount, unit, reason,
         frequencyType, repeatDays, reminderEnabled, reminderTime, reminderNotificationId,
         hasCost, baselineQuantity, pricePerItem, goalType, reduceDays, summaryTime, summaryNotificationId,
+        attendedCount, heldCount, attendanceTarget, examDate, checkupIntervalDays,
+        doseAmount, doseUnit, dosageFrequency, durationType, medicineCategory, medicationNotificationIds,
+        tabletsPerPacket, stockRemaining, lowStockNotifiedAt, medicationStartDate, totalTabletsBought,
         createdAt, archivedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`,
       [
         id,
         draft.kind,
@@ -218,7 +290,7 @@ export const useStore = create<StoreState>((set, get) => ({
         draft.templateId,
         draft.name,
         draft.trackingMethod,
-        draft.targetAmount,
+        targetAmount,
         draft.unit,
         draft.reason,
         draft.frequencyType,
@@ -233,6 +305,22 @@ export const useStore = create<StoreState>((set, get) => ({
         draft.reduceDays,
         draft.summaryTime,
         summaryNotificationId,
+        draft.templateId === "attendance" ? 0 : null,
+        draft.templateId === "attendance" ? 0 : null,
+        draft.attendanceTarget,
+        draft.examDate,
+        draft.checkupIntervalDays,
+        draft.doseAmount,
+        draft.doseUnit,
+        draft.dosageFrequency,
+        draft.durationType,
+        draft.medicineCategory,
+        medicationNotificationIds ? JSON.stringify(medicationNotificationIds) : null,
+        draft.tabletsPerPacket,
+        draft.tabletsPerPacket,
+        null,
+        draft.startDate,
+        draft.tabletsPerPacket,
         now,
       ]
     );
@@ -256,7 +344,7 @@ export const useStore = create<StoreState>((set, get) => ({
       templateId: draft.templateId,
       name: draft.name,
       trackingMethod: draft.trackingMethod,
-      targetAmount: draft.targetAmount,
+      targetAmount,
       unit: draft.unit,
       reason: draft.reason,
       frequencyType: draft.frequencyType,
@@ -273,6 +361,23 @@ export const useStore = create<StoreState>((set, get) => ({
       summaryNotificationId,
       locationTrackingEnabled: false,
       backgroundLocationEnabled: false,
+      attendedCount: draft.templateId === "attendance" ? 0 : null,
+      heldCount: draft.templateId === "attendance" ? 0 : null,
+      attendanceTarget: draft.attendanceTarget,
+      examDate: draft.examDate,
+      checkupIntervalDays: draft.checkupIntervalDays,
+      doseAmount: draft.doseAmount,
+      doseUnit: draft.doseUnit,
+      dosageFrequency: draft.dosageFrequency,
+      durationType: draft.durationType,
+      medicineCategory: draft.medicineCategory,
+      medicationNotificationIds,
+      tabletsPerPacket: draft.tabletsPerPacket,
+      stockRemaining: draft.tabletsPerPacket,
+      lowStockNotifiedAt: null,
+      medicationStartDate: draft.startDate,
+      totalTabletsBought: draft.tabletsPerPacket,
+      pillColor: null,
       createdAt: now,
       archivedAt: null,
     };
@@ -293,6 +398,7 @@ export const useStore = create<StoreState>((set, get) => ({
     if (habit) {
       await cancelNotification(habit.reminderNotificationId);
       await cancelNotification(habit.summaryNotificationId);
+      await cancelMedicationNotifications(habit.medicationNotificationIds);
     }
     await db.runAsync("DELETE FROM habits WHERE id = ?", [habitId]);
     await db.runAsync("DELETE FROM microtasks WHERE habitId = ?", [habitId]);
@@ -319,6 +425,7 @@ export const useStore = create<StoreState>((set, get) => ({
     if (habit) {
       await cancelNotification(habit.reminderNotificationId);
       await cancelNotification(habit.summaryNotificationId);
+      await cancelMedicationNotifications(habit.medicationNotificationIds);
     }
     const now = new Date().toISOString();
     await db.runAsync("UPDATE habits SET archivedAt = ? WHERE id = ?", [now, habitId]);
@@ -355,10 +462,10 @@ export const useStore = create<StoreState>((set, get) => ({
     const id = existing?.id ?? genId();
 
     await db.runAsync(
-      `INSERT INTO daily_logs (id, habitId, date, amount, microtasksDone, reflection)
-       VALUES (?,?,?,?,?,?)
+      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection)
+       VALUES (?,?,?,?,?,?,?)
        ON CONFLICT(habitId, date) DO UPDATE SET amount = excluded.amount`,
-      [id, habitId, date, nextAmount, "[]", null]
+      [id, habitId, date, nextAmount, existing?.amountB ?? null, "[]", null]
     );
 
     set((s) => {
@@ -367,7 +474,7 @@ export const useStore = create<StoreState>((set, get) => ({
       const updated: DailyLog =
         idx >= 0
           ? { ...logs[idx], amount: nextAmount }
-          : { id, habitId, date, amount: nextAmount, microtasksDone: [], reflection: null };
+          : { id, habitId, date, amount: nextAmount, amountB: null, microtasksDone: [], reflection: null };
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
@@ -376,6 +483,14 @@ export const useStore = create<StoreState>((set, get) => ({
     // silently records where the user is - runs in the background so it
     // never slows down the tap itself.
     const habit = get().habits.find((h) => h.id === habitId);
+
+    if (habit?.templateId === "medication" && habit.stockRemaining !== null) {
+      const nextStock = await adjustStock(habitId, delta);
+      set((s) => ({
+        habits: s.habits.map((h) => (h.id === habitId ? { ...h, stockRemaining: nextStock } : h)),
+      }));
+    }
+
     if (delta > 0 && habit?.locationTrackingEnabled) {
       void (async () => {
         const point = await getCurrentLocation();
@@ -397,6 +512,98 @@ export const useStore = create<StoreState>((set, get) => ({
         syncGeofences(get().habits, nextSmokeLocationsByHabit);
       })();
     }
+  },
+
+  // "I bought more" - the user says how many they actually bought, added
+  // to both stockRemaining (what's left) and totalTabletsBought (the real
+  // denominator for the progress bar - not the original packet size,
+  // which would otherwise cap the bar at 100% forever after one restock);
+  // also clears lowStockNotifiedAt so a future low point can alert again.
+  confirmRestock: async (habitId, quantity) => {
+    if (!quantity || quantity <= 0) return;
+    const db = await getDb();
+    const habit = get().habits.find((h) => h.id === habitId);
+    if (!habit || !habit.tabletsPerPacket) return;
+    // Falls back to tabletsPerPacket, not 0 - a habit whose
+    // totalTabletsBought predates this column (created before it existed)
+    // would otherwise undercount every restock from here on.
+    const baseTotal = habit.totalTabletsBought ?? habit.tabletsPerPacket;
+    const nextStock = (habit.stockRemaining ?? 0) + quantity;
+    const nextTotal = baseTotal + quantity;
+    await db.runAsync(
+      "UPDATE habits SET stockRemaining = ?, totalTabletsBought = ?, lowStockNotifiedAt = NULL WHERE id = ?",
+      [nextStock, nextTotal, habitId]
+    );
+    set((s) => ({
+      habits: s.habits.map((h) =>
+        h.id === habitId ? { ...h, stockRemaining: nextStock, totalTabletsBought: nextTotal, lowStockNotifiedAt: null } : h
+      ),
+    }));
+  },
+
+  // A full reset, not a purchase - "I have exactly N right now" wipes any
+  // drifted history and restarts both the remaining count and the progress
+  // bar's own total from that same number (not a floor on top of whatever
+  // total was on record before - that reads as "still 31 total" even after
+  // the user explicitly said "21," which is the confusing part a plain
+  // max() got wrong).
+  setExactStock: async (habitId, exactAmount) => {
+    if (exactAmount < 0) return;
+    const db = await getDb();
+    const habit = get().habits.find((h) => h.id === habitId);
+    if (!habit || !habit.tabletsPerPacket) return;
+    await db.runAsync(
+      "UPDATE habits SET stockRemaining = ?, totalTabletsBought = ?, lowStockNotifiedAt = NULL WHERE id = ?",
+      [exactAmount, exactAmount, habitId]
+    );
+    set((s) => ({
+      habits: s.habits.map((h) =>
+        h.id === habitId ? { ...h, stockRemaining: exactAmount, totalTabletsBought: exactAmount, lowStockNotifiedAt: null } : h
+      ),
+    }));
+  },
+
+  setPillColor: async (habitId, color) => {
+    const db = await getDb();
+    await db.runAsync("UPDATE habits SET pillColor = ? WHERE id = ?", [color, habitId]);
+    set((s) => ({
+      habits: s.habits.map((h) => (h.id === habitId ? { ...h, pillColor: color } : h)),
+    }));
+  },
+
+  // Real prescriptions change mid-course - this only touches the schedule
+  // going forward (frequency, start date, the derived dose target, and the
+  // scheduled reminders); stock, price and logged history are left exactly
+  // as they are, on purpose.
+  updateMedicationSchedule: async (habitId, changes) => {
+    const db = await getDb();
+    const habit = get().habits.find((h) => h.id === habitId);
+    if (!habit) return;
+
+    await cancelMedicationNotifications(habit.medicationNotificationIds);
+    const dosageFrequency = changes.dosageFrequency ?? habit.dosageFrequency;
+    const medicationStartDate = changes.medicationStartDate ?? habit.medicationStartDate;
+    const medicationNotificationIds = await scheduleMedicationNotifications({
+      habitId: habit.id,
+      name: habit.name,
+      doseAmount: habit.doseAmount,
+      doseUnit: habit.doseUnit,
+      dosageFrequency,
+      durationType: habit.durationType,
+      startTime: habit.reminderTime ?? "08:00",
+      startDate: medicationStartDate ?? todayISO(),
+    });
+    const targetAmount = changes.dosageFrequency ? parseDosageFrequency(dosageFrequency) : habit.targetAmount;
+
+    await db.runAsync(
+      "UPDATE habits SET dosageFrequency = ?, medicationStartDate = ?, medicationNotificationIds = ?, targetAmount = ? WHERE id = ?",
+      [dosageFrequency, medicationStartDate, JSON.stringify(medicationNotificationIds), targetAmount, habitId]
+    );
+    set((s) => ({
+      habits: s.habits.map((h) =>
+        h.id === habitId ? { ...h, dosageFrequency, medicationStartDate, medicationNotificationIds, targetAmount } : h
+      ),
+    }));
   },
 
   setGoalType: async (habitId, goalType, reduceDays) => {
@@ -451,10 +658,10 @@ export const useStore = create<StoreState>((set, get) => ({
     const doneJson = JSON.stringify(nextDone);
 
     await db.runAsync(
-      `INSERT INTO daily_logs (id, habitId, date, amount, microtasksDone, reflection)
-       VALUES (?,?,?,?,?,?)
+      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection)
+       VALUES (?,?,?,?,?,?,?)
        ON CONFLICT(habitId, date) DO UPDATE SET microtasksDone = excluded.microtasksDone`,
-      [id, habitId, date, 0, doneJson, null]
+      [id, habitId, date, 0, existing?.amountB ?? null, doneJson, null]
     );
 
     set((s) => {
@@ -463,7 +670,7 @@ export const useStore = create<StoreState>((set, get) => ({
       const updated: DailyLog =
         idx >= 0
           ? { ...logs[idx], microtasksDone: nextDone }
-          : { id, habitId, date, amount: 0, microtasksDone: nextDone, reflection: null };
+          : { id, habitId, date, amount: 0, amountB: null, microtasksDone: nextDone, reflection: null };
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
@@ -487,10 +694,10 @@ export const useStore = create<StoreState>((set, get) => ({
     const id = existing?.id ?? genId();
 
     await db.runAsync(
-      `INSERT INTO daily_logs (id, habitId, date, amount, microtasksDone, reflection)
-       VALUES (?,?,?,?,?,?)
+      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection)
+       VALUES (?,?,?,?,?,?,?)
        ON CONFLICT(habitId, date) DO UPDATE SET reflection = excluded.reflection`,
-      [id, habitId, date, 0, "[]", text]
+      [id, habitId, date, 0, existing?.amountB ?? null, "[]", text]
     );
 
     set((s) => {
@@ -499,7 +706,7 @@ export const useStore = create<StoreState>((set, get) => ({
       const updated: DailyLog =
         idx >= 0
           ? { ...logs[idx], reflection: text }
-          : { id, habitId, date, amount: 0, microtasksDone: [], reflection: text };
+          : { id, habitId, date, amount: 0, amountB: null, microtasksDone: [], reflection: text };
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
@@ -572,6 +779,86 @@ export const useStore = create<StoreState>((set, get) => ({
     // Deleting a cluster's points removes it from the next geofence sync too -
     // this is what actually stops a mis-logged spot (e.g. home) from firing.
     syncGeofences(get().habits, nextSmokeLocationsByHabit);
+  },
+
+  logDualMetric: async (habitId, date, amountA, amountB) => {
+    const db = await getDb();
+    const existing = get().logsByHabit[habitId]?.find((l) => l.date === date);
+    const id = existing?.id ?? genId();
+
+    await db.runAsync(
+      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection)
+       VALUES (?,?,?,?,?,?,?)
+       ON CONFLICT(habitId, date) DO UPDATE SET amount = excluded.amount, amountB = excluded.amountB`,
+      [id, habitId, date, amountA, amountB, existing ? JSON.stringify(existing.microtasksDone) : "[]", existing?.reflection ?? null]
+    );
+
+    set((s) => {
+      const logs = s.logsByHabit[habitId] ?? [];
+      const idx = logs.findIndex((l) => l.date === date);
+      const updated: DailyLog =
+        idx >= 0
+          ? { ...logs[idx], amount: amountA, amountB }
+          : { id, habitId, date, amount: amountA, amountB, microtasksDone: [], reflection: null };
+      const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
+      return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
+    });
+  },
+
+  logAttendance: async (habitId, attended) => {
+    const db = await getDb();
+    const habit = get().habits.find((h) => h.id === habitId);
+    if (!habit) return;
+    const nextAttended = (habit.attendedCount ?? 0) + (attended ? 1 : 0);
+    const nextHeld = (habit.heldCount ?? 0) + 1;
+
+    await db.runAsync("UPDATE habits SET attendedCount = ?, heldCount = ? WHERE id = ?", [nextAttended, nextHeld, habitId]);
+    set((s) => ({
+      habits: s.habits.map((h) => (h.id === habitId ? { ...h, attendedCount: nextAttended, heldCount: nextHeld } : h)),
+    }));
+
+    // A plain check-in for today too, purely so this habit still shows up in
+    // streaks/home completion the same way every other habit does - the real
+    // attendance numbers live on the habit row above, not in this log.
+    const today = todayISO();
+    const existing = get().logsByHabit[habitId]?.find((l) => l.date === today);
+    const logId = existing?.id ?? genId();
+    await db.runAsync(
+      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection)
+       VALUES (?,?,?,?,?,?,?)
+       ON CONFLICT(habitId, date) DO UPDATE SET amount = excluded.amount`,
+      [logId, habitId, today, 1, existing?.amountB ?? null, existing ? JSON.stringify(existing.microtasksDone) : "[]", existing?.reflection ?? null]
+    );
+    set((s) => {
+      const logs = s.logsByHabit[habitId] ?? [];
+      const idx = logs.findIndex((l) => l.date === today);
+      const updated: DailyLog =
+        idx >= 0 ? { ...logs[idx], amount: 1 } : { id: logId, habitId, date: today, amount: 1, amountB: null, microtasksDone: [], reflection: null };
+      const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
+      return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
+    });
+  },
+
+  addMicrotasks: async (habitId, texts) => {
+    const trimmed = texts.map((t) => t.trim()).filter(Boolean);
+    if (trimmed.length === 0) return;
+    const db = await getDb();
+    const existing = get().microtasksByHabit[habitId] ?? [];
+    let nextSort = existing.length;
+    const added: Microtask[] = [];
+    for (const text of trimmed) {
+      const microtaskId = genId();
+      await db.runAsync("INSERT INTO microtasks (id, habitId, text, sortOrder) VALUES (?,?,?,?)", [
+        microtaskId,
+        habitId,
+        text,
+        nextSort++,
+      ]);
+      added.push({ id: microtaskId, habitId, text, sortOrder: nextSort - 1 });
+    }
+    set((s) => ({
+      microtasksByHabit: { ...s.microtasksByHabit, [habitId]: [...(s.microtasksByHabit[habitId] ?? []), ...added] },
+    }));
   },
 }));
 

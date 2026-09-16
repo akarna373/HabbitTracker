@@ -25,6 +25,16 @@ interface DraftState {
   reduceDays: number | null;
   summaryTime: string | null;
   microtasks: string[];
+  attendanceTarget: number | null;
+  examDate: string | null;
+  checkupIntervalDays: number | null;
+  doseAmount: number | null;
+  doseUnit: string | null;
+  dosageFrequency: string | null;
+  durationType: string | null;
+  medicineCategory: string | null;
+  tabletsPerPacket: number | null;
+  startDate: string | null;
   // Template-derived example numbers shown only as input placeholders (e.g.
   // "e.g. 5") - never written into the habit itself, so the user always has
   // to type their own value before Continue enables.
@@ -56,6 +66,16 @@ const initial = {
   reduceDays: null as number | null,
   summaryTime: "22:00",
   microtasks: [] as string[],
+  attendanceTarget: null as number | null,
+  examDate: null as string | null,
+  checkupIntervalDays: null as number | null,
+  doseAmount: null as number | null,
+  doseUnit: null as string | null,
+  dosageFrequency: null as string | null,
+  durationType: null as string | null,
+  medicineCategory: null as string | null,
+  tabletsPerPacket: null as number | null,
+  startDate: null as string | null,
   suggestedTargetAmount: null as number | null,
   suggestedBaselineQuantity: null as number | null,
   suggestedPricePerItem: null as number | null,

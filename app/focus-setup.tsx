@@ -11,7 +11,7 @@ import { colors, spacing, typography } from "../lib/theme";
 // All five chips render fully visible immediately. After a 2s pause, "bad
 // habits" wiggles while every chip's icon reveals from grey to its own
 // colour, each in turn at a reading pace (even gaps, not rushed): bad ->
-// good -> study -> fitness -> projects - as if the user's eyes were moving
+// health -> study -> fitness -> projects - as if the user's eyes were moving
 // from one option to the next.
 const READING_PACE_MS = 550;
 const INITIAL_DELAY_MS = 2000;
@@ -26,7 +26,7 @@ interface AreaDef {
 }
 
 const FOCUS_AREAS: AreaDef[] = [
-  { id: "good", label: "Build good habits", icon: "thumbs-up", color: "#1877F2", tintBg: "rgba(24,119,242,0.16)" },
+  { id: "health", label: "Health", icon: "thumbs-up", color: "#1877F2", tintBg: "rgba(24,119,242,0.16)" },
   { id: "bad", label: "Track bad habits", icon: "thumbs-down", color: colors.accentRed, tintBg: "rgba(255,90,98,0.16)" },
   { id: "study", label: "Study", icon: "school", color: "#8B5CF6", tintBg: "rgba(139,92,246,0.16)" },
   { id: "personal_goal", label: "Fitness", icon: "heart", color: "#FF3B5C", tintBg: "rgba(255,59,92,0.16)" },
@@ -95,7 +95,7 @@ function useIconEntrance() {
           reveal("bad"),
         ]),
         Animated.delay(READING_PACE_MS),
-        Animated.parallel([pulse(pulseByArea.good), reveal("good")]),
+        Animated.parallel([pulse(pulseByArea.health), reveal("health")]),
         Animated.delay(READING_PACE_MS),
         Animated.parallel([pulse(pulseByArea.study), reveal("study")]),
         Animated.delay(READING_PACE_MS),
@@ -123,14 +123,14 @@ export default function FocusSetupScreen() {
   // actually finished creating a habit in that category - not just visited
   // the templates. Fitness and Projects share kind "good" with Build-good-
   // habits, so category (not kind) is the discriminator for all three.
-  const hasGoodHabit = habits.some((h) => h.category === "good");
+  const hasHealthHabit = habits.some((h) => h.category === "health");
   const hasQuitHabit = habits.some((h) => h.category === "quit");
   const hasStudyHabit = habits.some((h) => h.category === "study");
   const hasFitnessHabit = habits.some((h) => h.category === "personal_goal");
   const hasProjectHabit = habits.some((h) => h.category === "achiever");
 
   const TEMPLATE_ROUTES: Record<string, { kind: "good" | "quit"; route: string }> = {
-    good: { kind: "good", route: "/habit/good-templates" },
+    health: { kind: "good", route: "/habit/health-templates" },
     bad: { kind: "quit", route: "/habit/quit-templates" },
     study: { kind: "good", route: "/habit/study-templates" },
     personal_goal: { kind: "good", route: "/habit/fitness-templates" },
@@ -138,7 +138,7 @@ export default function FocusSetupScreen() {
   };
 
   const hasHabitByArea: Record<string, boolean> = {
-    good: hasGoodHabit,
+    health: hasHealthHabit,
     bad: hasQuitHabit,
     study: hasStudyHabit,
     personal_goal: hasFitnessHabit,

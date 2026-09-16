@@ -24,7 +24,7 @@ export default function StudyTemplatesScreen() {
     set({
       templateId: template.id,
       name: template.name,
-      trackingMethod: "amount",
+      trackingMethod: template.trackingMethod ?? "amount",
       targetAmount: null,
       suggestedTargetAmount: template.targetAmount,
       unit: template.unit,

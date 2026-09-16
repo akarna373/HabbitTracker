@@ -30,9 +30,22 @@ export function isHabitCompleteOn(habit: Habit, logs: DailyLog[] | undefined, da
   return (log?.amount ?? 0) >= (habit.targetAmount ?? Infinity);
 }
 
+// For most cost-tracked habits, pricePerItem already means "per dose/unit
+// consumed". Medication with stock tracking on is the one exception -
+// there the user enters the price of a whole packet, so this divides it
+// down to a per-tablet price first. Every other habit falls through
+// unchanged.
+export function pricePerDose(habit: Habit): number {
+  if (!habit.pricePerItem) return 0;
+  if (habit.templateId === "medication" && habit.tabletsPerPacket) {
+    return habit.pricePerItem / habit.tabletsPerPacket;
+  }
+  return habit.pricePerItem;
+}
+
 export function costForAmount(habit: Habit, amount: number): number {
   if (!habit.hasCost || !habit.pricePerItem) return 0;
-  return amount * habit.pricePerItem;
+  return amount * pricePerDose(habit);
 }
 
 export function baselineCost(habit: Habit): number {
@@ -121,4 +134,48 @@ export function totalAmountThisWeek(logs: DailyLog[] | undefined): number {
     const log = selectLogForDate(logs, date);
     return sum + (log?.amount ?? 0);
   }, 0);
+}
+
+// This week's real spend for a cost-tracked "good" habit (e.g. Medication) -
+// unlike estimatedSavingsThisWeek, there's no baseline to compare against,
+// just the actual total.
+export function totalCostThisWeek(habit: Habit, logs: DailyLog[] | undefined): number {
+  if (!habit.hasCost) return 0;
+  return last7Days().reduce((sum, date) => {
+    const log = selectLogForDate(logs, date);
+    if (!log) return sum;
+    return sum + costForAmount(habit, log.amount);
+  }, 0);
+}
+
+export function daysUntilExam(habit: Habit): number | null {
+  if (!habit.examDate) return null;
+  return daysBetween(todayISO(), habit.examDate);
+}
+
+export function attendancePercent(habit: Habit): number {
+  const held = habit.heldCount ?? 0;
+  if (held <= 0) return 100;
+  return Math.round(((habit.attendedCount ?? 0) / held) * 100);
+}
+
+// Plain arithmetic against the habit's own target %: how many more can be
+// missed and still clear it, or how many in a row are needed to reach it.
+export function attendanceGuidance(habit: Habit): string {
+  const target = habit.attendanceTarget ?? 75;
+  const attended = habit.attendedCount ?? 0;
+  const held = habit.heldCount ?? 0;
+
+  if (held === 0) return `Log your first class to start tracking toward ${target}%`;
+
+  const percent = (attended / held) * 100;
+  if (percent >= target) {
+    const canMiss = Math.floor((attended * 100) / target - held);
+    return canMiss > 0
+      ? `You can miss ${canMiss} more and stay at ${target}%+`
+      : `Right at the edge of ${target}% - don't miss the next one`;
+  }
+
+  const need = Math.ceil((target * held - 100 * attended) / (100 - target));
+  return `Attend the next ${Math.max(need, 1)} in a row to reach ${target}%`;
 }

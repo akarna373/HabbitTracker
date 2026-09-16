@@ -1,4 +1,6 @@
-export type IconSet = "ionicons" | "material";
+import type { TrackingMethod } from "./types";
+
+export type IconSet = "ionicons" | "material" | "image";
 
 export interface GoodTemplate {
   id: string;
@@ -9,83 +11,98 @@ export interface GoodTemplate {
   microtasks: string[];
   iconSet: IconSet;
   icon: string;
+  // Cost tracking for a "good" habit (e.g. Medication) - reuses the same
+  // hasCost/pricePerItem fields and costForAmount math already built for
+  // quit habits, just wired up for a good habit for the first time.
+  hasCost?: boolean;
+  defaultPricePerItem?: number;
+  // Defaults to "amount" (the existing behavior) when omitted.
+  trackingMethod?: TrackingMethod;
 }
 
-export const GOOD_TEMPLATES: GoodTemplate[] = [
+export const HEALTH_TEMPLATES: GoodTemplate[] = [
   {
-    id: "read",
-    name: "Read a little",
-    description: "Track pages or minutes",
-    unit: "minutes",
-    targetAmount: 10,
-    microtasks: ["Put the book on the desk", "Open to the saved page", "Read for two minutes"],
-    iconSet: "ionicons",
-    icon: "book-outline",
+    id: "medication",
+    name: "Take medication",
+    description: "Never miss a dose, and see what it costs",
+    unit: "doses",
+    targetAmount: 1,
+    microtasks: [
+      "Get your pillbox",
+      "Take today's dose",
+      "Mark it done",
+      "You can also mark it done in notification panel",
+    ],
+    iconSet: "image",
+    icon: "medication",
+    hasCost: true,
+    defaultPricePerItem: 20,
   },
   {
-    id: "walking_jogging",
-    name: "Walking and Jogging",
-    description: "Track minutes spent walking or jogging outdoors",
-    unit: "minutes",
-    targetAmount: 20,
-    microtasks: ["Put on your shoes", "Step outside the door", "Walk or jog for five minutes"],
-    iconSet: "material",
-    icon: "run-fast",
+    id: "vitals_log",
+    name: "Vitals log",
+    description: "Track your blood pressure day to day",
+    unit: "check-ins",
+    targetAmount: 1,
+    microtasks: ["Sit still for a minute first", "Take your reading", "Log it"],
+    iconSet: "ionicons",
+    icon: "pulse-outline",
+    trackingMethod: "checkin",
   },
   {
-    id: "mindfulness",
-    name: "Practice mindfulness",
-    description: "Meditation or breathing",
-    unit: "minutes",
-    targetAmount: 10,
-    microtasks: ["Find a quiet spot", "Sit and close your eyes", "Breathe for one minute"],
+    id: "doctor_checkup",
+    name: "Doctor checkups",
+    description: "A periodic reminder so a checkup never slips",
+    unit: "check-ins",
+    targetAmount: 1,
+    microtasks: ["Call and book the appointment", "Write down what to ask", "Go"],
     iconSet: "ionicons",
-    icon: "leaf-outline",
+    icon: "medkit-outline",
+    trackingMethod: "checkin",
   },
 ];
 
-export const CUSTOM_GOOD_TEMPLATE_ID = "custom-good";
+export const CUSTOM_HEALTH_TEMPLATE_ID = "custom-health";
+
+// Weight/waist, systolic/diastolic - two numbers logged together for one
+// day. Template-constant display labels, not per-habit state.
+export const DUAL_METRIC_LABELS: Record<string, { labelA: string; unitA: string; labelB: string; unitB: string }> = {
+  weightloss_journey: { labelA: "Weight", unitA: "kg", labelB: "Waist", unitB: "cm" },
+  vitals_log: { labelA: "Systolic", unitA: "mmHg", labelB: "Diastolic", unitB: "mmHg" },
+};
+export const DUAL_METRIC_TEMPLATE_IDS = Object.keys(DUAL_METRIC_LABELS);
 
 export const STUDY_TEMPLATES: GoodTemplate[] = [
   {
-    id: "practice_problems",
-    name: "Practice problems",
-    description: "Work through exercises or past papers",
+    id: "exam_countdown",
+    name: "Track your Exam",
+    description: "A countdown to exam day, plus daily study time",
     unit: "minutes",
     targetAmount: 30,
-    microtasks: ["Open your practice set", "Pick where you left off", "Solve for ten minutes"],
+    microtasks: ["Open your notes or textbook", "Pick a topic", "Study for ten minutes"],
     iconSet: "ionicons",
-    icon: "create-outline",
+    icon: "school-outline",
   },
   {
-    id: "syllabus",
-    name: "Track Syllabus and revision",
-    description: "Work through your syllabus, topic by topic",
+    id: "syllabus_progress",
+    name: "Track your Syllabus and progress",
+    description: "Turn your syllabus into a day-by-day checklist with any AI chat app",
     unit: "minutes",
     targetAmount: 20,
-    microtasks: ["Open your syllabus", "Pick the next topic", "Revise it for ten minutes"],
+    microtasks: ["Open your syllabus", "Pick the next topic", "Work through it for ten minutes"],
     iconSet: "ionicons",
     icon: "clipboard-outline",
   },
   {
-    id: "read_chapter",
-    name: "Read a chapter",
-    description: "Textbooks, papers or course material",
-    unit: "minutes",
-    targetAmount: 25,
-    microtasks: ["Open your textbook or reading", "Find your bookmark", "Read for ten minutes"],
+    id: "attendance",
+    name: "Attendance Tracker",
+    description: "How many classes you can still miss and stay on target",
+    unit: "check-ins",
+    targetAmount: 1,
+    microtasks: ["Check today's class schedule", "Go", "Log it after"],
     iconSet: "ionicons",
-    icon: "library-outline",
-  },
-  {
-    id: "watch_lecture",
-    name: "Watch a lecture",
-    description: "Video courses, recorded classes or tutorials",
-    unit: "minutes",
-    targetAmount: 20,
-    microtasks: ["Open your lecture or course", "Find where you paused", "Watch for ten minutes"],
-    iconSet: "ionicons",
-    icon: "videocam-outline",
+    icon: "checkbox-outline",
+    trackingMethod: "checkin",
   },
 ];
 
@@ -93,44 +110,28 @@ export const CUSTOM_STUDY_TEMPLATE_ID = "custom-study";
 
 export const FITNESS_TEMPLATES: GoodTemplate[] = [
   {
-    id: "medication",
-    name: "Take medication",
-    description: "Never miss a dose",
-    unit: "doses",
-    targetAmount: 1,
-    microtasks: ["Get your pillbox", "Take today's dose", "Mark it done"],
-    iconSet: "ionicons",
-    icon: "medical-outline",
-  },
-  {
-    id: "stretch",
-    name: "Stretch",
-    description: "Loosen up and prevent stiffness",
-    unit: "minutes",
-    targetAmount: 5,
-    microtasks: ["Clear a small space", "Stretch your legs and back", "Breathe and relax"],
-    iconSet: "ionicons",
-    icon: "body-outline",
-  },
-  {
-    id: "sleep",
-    name: "Sleep on time",
-    description: "Protect tomorrow's energy",
+    id: "walking_jogging",
+    name: "Walking and Jogging",
+    description: "A morning-walk check-in, with a smart reminder",
     unit: "check-ins",
     targetAmount: 1,
-    microtasks: ["Set a bedtime alarm", "Put your phone away", "Lights off"],
-    iconSet: "ionicons",
-    icon: "moon-outline",
+    microtasks: ["Put on your shoes", "Step outside the door", "Walk or jog for five minutes"],
+    iconSet: "material",
+    icon: "run-fast",
+    // Simple done/not-done for today, not a minutes count - matches the
+    // "I went for a walk" one-tap notification action.
+    trackingMethod: "checkin",
   },
   {
-    id: "nutrition",
-    name: "Eat a fruit or vegetable",
-    description: "One small step toward better nutrition",
-    unit: "servings",
-    targetAmount: 3,
-    microtasks: ["Wash a fruit or vegetable", "Add it to your plate", "Eat it before your next meal"],
+    id: "weightloss_journey",
+    name: "Track your weightloss journey",
+    description: "Weight and waist, together - waist catches what the scale alone misses",
+    unit: "check-ins",
+    targetAmount: 1,
+    microtasks: ["Weigh in first thing, before eating", "Measure your waist at the navel", "Log both"],
     iconSet: "ionicons",
-    icon: "nutrition-outline",
+    icon: "body-outline",
+    trackingMethod: "checkin",
   },
 ];
 
@@ -261,12 +262,11 @@ export interface CategoryOption {
 
 export const CATEGORIES: CategoryOption[] = [
   { id: "quit", title: "Quit a bad habit", subtitle: "Smoking, alcohol, chewing products or custom", enabled: true },
-  { id: "good", title: "Build a good habit", subtitle: "Health, study, routines or custom", enabled: true },
-  { id: "finance", title: "Finance", subtitle: "Category planned for a later release", enabled: false },
-  { id: "study", title: "Study", subtitle: "Category planned for a later release", enabled: false },
-  { id: "meditation", title: "Meditation", subtitle: "Category planned for a later release", enabled: false },
-  { id: "growth", title: "Personal growth", subtitle: "Category planned for a later release", enabled: false },
-  { id: "career", title: "Career", subtitle: "Category planned for a later release", enabled: false },
+  { id: "health", title: "Health", subtitle: "Medication, checkups and more", enabled: true },
+  { id: "fitness", title: "Fitness", subtitle: "Walking, jogging and more", enabled: true },
+  { id: "study", title: "Study", subtitle: "Exams, syllabus and attendance", enabled: true },
+  { id: "projects", title: "Projects", subtitle: "Category planned for a later release", enabled: false },
+  { id: "custom", title: "Create a Custom Template", subtitle: "Coming later", enabled: false },
 ];
 
 export const URGE_MICROTASKS = ["Pause and take five breaths", "Change your surroundings", "Message your supporter"];

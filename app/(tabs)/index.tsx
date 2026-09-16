@@ -1,10 +1,11 @@
 import { router } from "expo-router";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
 import { HeaderMenu } from "../../components/HeaderMenu";
 import { ProfileBadge } from "../../components/ProfileBadge";
 import { ProgressBar } from "../../components/ProgressBar";
+import { SpeedDialFab } from "../../components/SpeedDialFab";
 import { SwipeableHabitTile } from "../../components/SwipeableHabitTile";
 import { formatLongDate, todayISO } from "../../lib/dates";
 import { formatTime12h, isHabitCompleteOn } from "../../lib/progress";
@@ -61,9 +62,7 @@ export default function TodayScreen() {
         }
       />
 
-      <Pressable style={styles.fab} onPress={() => router.push("/add-activity")}>
-        <Text style={styles.fabText}>+</Text>
-      </Pressable>
+      <SpeedDialFab />
     </SafeAreaView>
   );
 }
@@ -115,20 +114,4 @@ const styles = StyleSheet.create({
   summaryCaption: { ...typography.caption },
   emptyTitle: { ...typography.body, fontWeight: "700", marginBottom: 4 },
   emptyBody: { ...typography.caption },
-  fab: {
-    position: "absolute",
-    right: spacing.lg,
-    bottom: spacing.lg,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.accentPink,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: colors.accentPink,
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  fabText: { fontSize: 28, color: colors.background, fontWeight: "700", marginTop: -2 },
 });

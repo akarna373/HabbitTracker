@@ -10,6 +10,7 @@ import { colors } from "../lib/theme";
 import { useStore } from "../lib/store";
 import { hasSeenOnboarding } from "../lib/onboarding";
 import { ConfirmDialogHost } from "../components/ConfirmDialog";
+import { OptionSheetHost } from "../components/OptionSheet";
 // Side-effect only: registers the geofencing TaskManager task at module
 // scope so Android can invoke it headlessly (app fully closed) - must be
 // part of the root bundle graph, not conditionally imported from a screen.
@@ -66,6 +67,7 @@ export default function RootLayout() {
           <Stack.Screen name="focus-setup" />
         </Stack>
         <ConfirmDialogHost />
+        <OptionSheetHost />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

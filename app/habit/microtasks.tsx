@@ -25,7 +25,7 @@ export default function MicrotasksScreen() {
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    if (draft.hasCost && tasks.length === 0) {
+    if (draft.kind === "quit" && tasks.length === 0) {
       const template = QUIT_TEMPLATES.find((t) => t.id === draft.templateId);
       setTasks(template?.urgeMicrotasks ?? URGE_MICROTASKS);
     }
@@ -66,6 +66,16 @@ export default function MicrotasksScreen() {
       goalType: finalDraft.goalType,
       reduceDays: finalDraft.reduceDays,
       summaryTime: finalDraft.hasCost ? finalDraft.summaryTime : null,
+      attendanceTarget: finalDraft.attendanceTarget,
+      examDate: finalDraft.examDate,
+      checkupIntervalDays: finalDraft.checkupIntervalDays,
+      doseAmount: finalDraft.doseAmount,
+      doseUnit: finalDraft.doseUnit,
+      dosageFrequency: finalDraft.dosageFrequency,
+      durationType: finalDraft.durationType,
+      medicineCategory: finalDraft.medicineCategory,
+      tabletsPerPacket: finalDraft.tabletsPerPacket,
+      startDate: finalDraft.startDate,
       microtasks: tasks.filter((t) => t.trim().length > 0),
     });
     const origin = finalDraft.origin;
@@ -82,7 +92,7 @@ export default function MicrotasksScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScreenHeader title="Start small" subtitle="New habit - Step 3 of 3" />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.label}>{draft.hasCost ? "WHEN AN URGE APPEARS" : "MICROTASKS"}</Text>
+        <Text style={styles.label}>{draft.kind === "quit" ? "WHEN AN URGE APPEARS" : "SUGGESTIONS"}</Text>
         <Card highlighted>
           {tasks.map((task, index) => (
             <View key={index} style={styles.taskRow}>
