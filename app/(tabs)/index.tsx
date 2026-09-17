@@ -8,6 +8,7 @@ import { ProgressBar } from "../../components/ProgressBar";
 import { SpeedDialFab } from "../../components/SpeedDialFab";
 import { SwipeableHabitTile } from "../../components/SwipeableHabitTile";
 import { formatLongDate, todayISO } from "../../lib/dates";
+import { getTodayDoseTimes } from "../../lib/medicationSchedule";
 import { formatTime12h, isHabitCompleteOn } from "../../lib/progress";
 import { useStore } from "../../lib/store";
 import { brandFont, colors, spacing, typography } from "../../lib/theme";
@@ -80,8 +81,15 @@ function TodayHabitTile({ habit, logs, today }: { habit: Habit; logs: DailyLog[]
     subtitle = done ? "Checked in" : "Not checked in yet";
   }
 
-  const reminderText =
-    habit.reminderEnabled && habit.reminderTime ? `Reminder ${formatTime12h(habit.reminderTime)}` : null;
+  // dosageFrequency is only ever set for a medication habit - its reminder
+  // line shows the next unlogged dose time today instead of the fixed
+  // reminderTime every other habit uses, since a medication can have
+  // several dose times a day, not just one.
+  const reminderText = habit.dosageFrequency
+    ? getMedicationReminderText(habit, log)
+    : habit.reminderEnabled && habit.reminderTime
+    ? `Reminder ${formatTime12h(habit.reminderTime)}`
+    : null;
 
   return (
     <SwipeableHabitTile
@@ -92,6 +100,21 @@ function TodayHabitTile({ habit, logs, today }: { habit: Habit; logs: DailyLog[]
       onPress={() => router.push(`/habit/${habit.id}`)}
     />
   );
+}
+
+// Assumes doses are taken in schedule order, since only a daily total is
+// logged, not which specific time slot - the same assumption the calendar
+// screen's per-time tick marks make (see medicine-calendar.tsx).
+function getMedicationReminderText(habit: Habit, log: DailyLog | undefined): string | null {
+  const times = getTodayDoseTimes({
+    dosageFrequency: habit.dosageFrequency,
+    durationType: habit.durationType,
+    startTime: habit.reminderTime ?? "08:00",
+  });
+  if (times.length === 0) return null;
+  const doneCount = log?.amount ?? 0;
+  const nextTime = times[doneCount];
+  return nextTime ? `Next med at ${formatTime12h(nextTime)}` : "All doses taken today";
 }
 
 const styles = StyleSheet.create({

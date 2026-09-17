@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
@@ -19,6 +20,7 @@ import { colors, spacing, typography } from "../../../lib/theme";
 export default function MedicineCalendarScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const habit = useStore((s) => s.habits.find((h) => h.id === id));
+  const logs = useStore((s) => s.logsByHabit[id ?? ""]);
   const calendarType = useStore((s) => s.calendarType);
   const updateMedicationSchedule = useStore((s) => s.updateMedicationSchedule);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -44,6 +46,10 @@ export default function MedicineCalendarScreen() {
   const markedDates = Array.from(new Set(occurrences.map((o) => o.date)));
   const endDate = markedDates[markedDates.length - 1];
   const selectedTimes = selectedDate ? occurrences.filter((o) => o.date === selectedDate).map((o) => o.time) : [];
+  // Only a daily total is logged, not which specific time slot - so the
+  // first `doneCount` times (in schedule order) are shown as taken, same
+  // assumption the Home tile's "Next med at..." line makes.
+  const doneCount = selectedDate ? logs?.find((l) => l.date === selectedDate)?.amount ?? 0 : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -103,9 +109,10 @@ export default function MedicineCalendarScreen() {
             <Text style={styles.detailTitle}>{formatLongDateForCalendar(selectedDate, calendarType)}</Text>
             {selectedTimes.length > 0 ? (
               selectedTimes.map((t, i) => (
-                <Text key={i} style={styles.detailBody}>
-                  {formatTime12h(t)}
-                </Text>
+                <View key={i} style={styles.timeRow}>
+                  <Text style={styles.detailBody}>{formatTime12h(t)}</Text>
+                  {i < doneCount ? <Ionicons name="checkmark-circle" size={18} color={colors.goalGreen} /> : null}
+                </View>
               ))
             ) : (
               <Text style={styles.detailBody}>No dose on this day.</Text>
@@ -137,4 +144,5 @@ const styles = StyleSheet.create({
   detailCard: { marginTop: spacing.md },
   detailTitle: { ...typography.body, fontWeight: "700", marginBottom: spacing.xs },
   detailBody: { ...typography.body },
+  timeRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.xs },
 });

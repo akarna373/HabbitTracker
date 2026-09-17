@@ -181,6 +181,25 @@ export async function scheduleMedicationNotifications(params: MedicationSchedule
   return ids;
 }
 
+// Just today's dose times ("HH:mm"), for the Home tile's "Next med at..."
+// line - the gap pattern resets every calendar day (see the comment on
+// computeDoseOccurrences above), so a single-day override always gives
+// today's real times regardless of what day the course is actually on.
+export function getTodayDoseTimes(params: {
+  dosageFrequency: string | null;
+  durationType: string | null;
+  startTime: string;
+}): string[] {
+  const occurrences = computeDoseOccurrences({
+    dosageFrequency: params.dosageFrequency,
+    durationType: params.durationType,
+    startTime: params.startTime,
+    startDate: todayISO(),
+    durationDaysOverride: 1,
+  });
+  return (occurrences ?? []).map((o) => o.time);
+}
+
 export async function cancelMedicationNotifications(ids: string[] | null): Promise<void> {
   if (!ids) return;
   for (const id of ids) {

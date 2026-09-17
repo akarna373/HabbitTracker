@@ -19,7 +19,7 @@ import {
   hasBackgroundLocationPermission,
   nearestHotspot,
 } from "../../../lib/location";
-import { scheduleImmediateNotification } from "../../../lib/notifications";
+import { scheduleHotspotDeterrentNotification } from "../../../lib/notifications";
 import { getCourseCalendarView } from "../../../lib/medicationSchedule";
 import {
   attendanceGuidance,
@@ -36,7 +36,7 @@ import {
 } from "../../../lib/progress";
 import { selectLogForDate, useStore } from "../../../lib/store";
 import { colors, radii, spacing, typography } from "../../../lib/theme";
-import { DUAL_METRIC_LABELS, DUAL_METRIC_TEMPLATE_IDS } from "../../../lib/templates";
+import { DUAL_METRIC_LABELS, DUAL_METRIC_TEMPLATE_IDS, getQuitCopy } from "../../../lib/templates";
 import type { Microtask } from "../../../lib/types";
 
 // A literal [] fallback in the selector below would be a new array every
@@ -108,14 +108,19 @@ export default function HabitDetailScreen() {
       const current = await getCurrentLocation();
       if (!current || cancelled) return;
       const hotspots = findHotspots(smokeLocations ?? []);
-      if (nearestHotspot(current, hotspots) !== null) {
+      if (nearestHotspot(current, hotspots) !== null && habit) {
         // A passive in-screen card read as encouragement to just go smoke
         // somewhere else - a real push notification is the actual deterrent,
         // since it can reach the user the moment they're at the spot, not
-        // only if they happen to have this screen open already.
-        scheduleImmediateNotification(
-          "You're at your smoking location",
-          "Please move away from this spot - it's better for your health and your finances."
+        // only if they happen to have this screen open already. The inline
+        // "I {verb}" / "I didn't" actions log the moment directly, so
+        // logging doesn't require opening the app at all.
+        const { locationNoun, verb } = getQuitCopy(habit.templateId);
+        scheduleHotspotDeterrentNotification(
+          habit.id,
+          `You're at your ${locationNoun} location`,
+          "Please move away from this spot - it's better for your health and your finances.",
+          verb
         );
       }
     })();
@@ -126,6 +131,7 @@ export default function HabitDetailScreen() {
 
   if (!habit) return null;
 
+  const quitCopy = getQuitCopy(habit.templateId);
   const amount = log?.amount ?? 0;
   const streak = computeStreak(habit, logs);
   const isDualMetric = DUAL_METRIC_TEMPLATE_IDS.includes(habit.templateId ?? "");
@@ -153,7 +159,7 @@ export default function HabitDetailScreen() {
         setTrackingUiValue(false);
         confirmDialog(
           "Location permission needed",
-          "To warn you at places you usually smoke, allow this app to access your location.",
+          `To warn you at your usual ${quitCopy.locationNoun} spots, allow this app to access your location.`,
           [{ text: "OK" }]
         );
         return;
@@ -251,8 +257,8 @@ export default function HabitDetailScreen() {
           <Card style={styles.locationCard}>
             <View style={styles.row}>
               <View style={styles.rowTextCol}>
-                <Text style={styles.cardTitle}>Track smoking locations</Text>
-                <Text style={styles.cardCaption}>Warns you at your usual smoking spots</Text>
+                <Text style={styles.cardTitle}>Track {quitCopy.locationNoun} locations</Text>
+                <Text style={styles.cardCaption}>Warns you at your usual {quitCopy.locationNoun} spots</Text>
                 <Text style={styles.cardCaption}>Log in the moment - bulk logs misplace the spot</Text>
               </View>
               <ThemedSwitch value={trackingUiValue} onValueChange={toggleLocationTracking} />
@@ -278,7 +284,7 @@ export default function HabitDetailScreen() {
 
           {amount === 0 ? (
             <PrimaryButton
-              title="I stayed smoke-free today"
+              title={`I stayed ${quitCopy.freeLabel} today`}
               variant="outline"
               onPress={() => incrementAmount(habit.id, today, 0)}
               style={styles.statusButton}

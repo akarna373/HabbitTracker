@@ -150,6 +150,62 @@ async function markCheckedInToday(habitId: string): Promise<void> {
   );
 }
 
+// Raw-DB version of the store's incrementAmount, for the same reason every
+// other function in this file is raw DB - a notification action can fire
+// with no React tree mounted. delta=0 (the hotspot's "I didn't" action)
+// still upserts a same-day row so a clean day counts for streaks/goals,
+// without changing the amount - same effect as delta=0 through the store.
+async function incrementHabitAmountToday(habitId: string, delta: number): Promise<void> {
+  const db = await getDb();
+  const today = todayISO();
+  const existing = await db.getFirstAsync<{ id: string; amount: number }>(
+    "SELECT id, amount FROM daily_logs WHERE habitId = ? AND date = ?",
+    [habitId, today]
+  );
+  const id = existing?.id ?? genId();
+  const nextAmount = Math.max(0, (existing?.amount ?? 0) + delta);
+  await db.runAsync(
+    `INSERT INTO daily_logs (id, habitId, date, amount, microtasksDone, reflection)
+     VALUES (?,?,?,?,?,?)
+     ON CONFLICT(habitId, date) DO UPDATE SET amount = excluded.amount`,
+    [id, habitId, today, nextAmount, "[]", null]
+  );
+}
+
+// The hotspot deterrent alert, with inline "I {verb}" / "I didn't" /
+// "Dismiss" actions - registers this habit's own category on demand (button
+// labels need the habit's own verb - "I smoked"/"I drank"/"I chewed"/
+// whatever a custom quit habit calls it - so one shared category with fixed
+// text, like WALK_CATEGORY_ID/DOSE_CATEGORY_ID above, won't work here).
+export async function scheduleHotspotDeterrentNotification(
+  habitId: string,
+  title: string,
+  body: string,
+  verb: string
+): Promise<void> {
+  if (!Notifications) return;
+  const granted = await ensureNotificationPermission();
+  if (!granted) return;
+  const categoryId = `hotspot-${habitId}`;
+  await Notifications.setNotificationCategoryAsync(categoryId, [
+    // opensAppToForeground: true - the app has no background task for
+    // notification responses, so if the process was killed since the
+    // notification fired (the common case), a false here means the JS
+    // listener below never runs at all. true guarantees it does.
+    { identifier: HOTSPOT_YES_ACTION_ID, buttonTitle: `I ${verb}`, options: { opensAppToForeground: true } },
+    { identifier: HOTSPOT_NO_ACTION_ID, buttonTitle: "I didn't", options: { opensAppToForeground: true } },
+    {
+      identifier: HOTSPOT_DISMISS_ACTION_ID,
+      buttonTitle: "Dismiss",
+      options: { opensAppToForeground: false, isDestructive: true },
+    },
+  ]);
+  await Notifications.scheduleNotificationAsync({
+    content: { title, body, categoryIdentifier: categoryId, data: { habitId } },
+    trigger: { channelId: DETERRENT_CHANNEL_ID },
+  });
+}
+
 // The morning-walk check-in: a daily reminder with an inline "I went for a
 // walk" action, so the user can log it without opening the app - matches
 // how the OS presents notification action buttons (tapping one dismisses
@@ -166,13 +222,24 @@ const DOSE_ACTION_ID = "took-dose";
 // notification without touching the dose count or stock.
 const DOSE_DISMISS_ACTION_ID = "dismiss-dose";
 
+// The hotspot deterrent's three actions - shared identifiers across every
+// substance (smoking/drinking/chewing/a custom quit habit), since only the
+// button *label* differs per habit (its own verb) - the category is
+// registered per-habit, on demand, right before scheduling (see
+// scheduleHotspotDeterrentNotification below), not once at module load like
+// the two fixed categories above.
+const HOTSPOT_YES_ACTION_ID = "hotspot-yes";
+const HOTSPOT_NO_ACTION_ID = "hotspot-no";
+const HOTSPOT_DISMISS_ACTION_ID = "hotspot-dismiss";
+
 if (Notifications) {
   Notifications.setNotificationCategoryAsync(WALK_CATEGORY_ID, [
-    { identifier: WALK_ACTION_ID, buttonTitle: "I went for a walk", options: { opensAppToForeground: false } },
+    // Same opensAppToForeground: true reasoning as the hotspot actions above.
+    { identifier: WALK_ACTION_ID, buttonTitle: "I went for a walk", options: { opensAppToForeground: true } },
   ]).catch(() => {});
 
   Notifications.setNotificationCategoryAsync(DOSE_CATEGORY_ID, [
-    { identifier: DOSE_ACTION_ID, buttonTitle: "I took it", options: { opensAppToForeground: false } },
+    { identifier: DOSE_ACTION_ID, buttonTitle: "I took it", options: { opensAppToForeground: true } },
     {
       identifier: DOSE_DISMISS_ACTION_ID,
       buttonTitle: "Dismiss",
@@ -187,6 +254,15 @@ if (Notifications) {
       markCheckedInToday(habitId).catch(() => {});
     } else if (response.actionIdentifier === DOSE_ACTION_ID) {
       markDoseTaken(habitId).catch(() => {});
+    } else if (response.actionIdentifier === HOTSPOT_YES_ACTION_ID) {
+      // "I smoked/drank/chewed" - one more logged today, same math as
+      // tapping the in-app Counter's + button.
+      incrementHabitAmountToday(habitId, 1).catch(() => {});
+    } else if (response.actionIdentifier === HOTSPOT_NO_ACTION_ID) {
+      // "I didn't" - same as the "I stayed {x}-free today" button: ensures
+      // today has a logged (clean) day for streak/goal purposes, without
+      // adding to the count.
+      incrementHabitAmountToday(habitId, 0).catch(() => {});
     }
   });
 }

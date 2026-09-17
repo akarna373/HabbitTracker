@@ -201,6 +201,10 @@ export interface QuitTemplate {
   verb?: string; // "You {verb} 2 less than yesterday"
   daysLabel?: string; // "{n} {daysLabel}" this week
   motivateSubtitle?: string;
+  // "Track {locationNoun} locations" / "Warns you at your usual
+  // {locationNoun} spots" - falls back to smoking's wording, same as the
+  // other fields above.
+  locationNoun?: string;
 }
 
 export const QUIT_TEMPLATES: QuitTemplate[] = [
@@ -219,6 +223,7 @@ export const QUIT_TEMPLATES: QuitTemplate[] = [
     verb: "drank",
     daysLabel: "sober days",
     motivateSubtitle: "Before you pour one, read this.",
+    locationNoun: "drinking",
   },
   {
     id: "panmasala",
@@ -234,20 +239,33 @@ export const QUIT_TEMPLATES: QuitTemplate[] = [
     verb: "chewed",
     daysLabel: "chew-free days",
     motivateSubtitle: "Before you chew one, read this.",
+    locationNoun: "chewing",
   },
   { id: "scrolling", name: "Reduce scrolling", description: "Track time and urge alternatives", unit: "minutes", hasCost: false, defaultBaselineQuantity: 60, defaultPricePerItem: 0, iconSet: "ionicons", icon: "phone-portrait-outline" },
 ];
 
-const DEFAULT_QUIT_COPY = { verb: "smoked", daysLabel: "smoke-free days", motivateSubtitle: "Before you light up, read this." };
+const DEFAULT_QUIT_COPY = {
+  verb: "smoked",
+  daysLabel: "smoke-free days",
+  motivateSubtitle: "Before you light up, read this.",
+  locationNoun: "smoking",
+};
 
 // Central lookup so the detail/motivate/summary screens all read the same
 // habit-specific wording instead of each hardcoding smoking's terms.
-export function getQuitCopy(templateId?: string | null): { verb: string; daysLabel: string; motivateSubtitle: string } {
+export function getQuitCopy(
+  templateId?: string | null
+): { verb: string; daysLabel: string; motivateSubtitle: string; locationNoun: string; freeLabel: string } {
   const template = QUIT_TEMPLATES.find((t) => t.id === templateId);
+  const daysLabel = template?.daysLabel ?? DEFAULT_QUIT_COPY.daysLabel;
   return {
     verb: template?.verb ?? DEFAULT_QUIT_COPY.verb,
-    daysLabel: template?.daysLabel ?? DEFAULT_QUIT_COPY.daysLabel,
+    daysLabel,
     motivateSubtitle: template?.motivateSubtitle ?? DEFAULT_QUIT_COPY.motivateSubtitle,
+    locationNoun: template?.locationNoun ?? DEFAULT_QUIT_COPY.locationNoun,
+    // "smoke-free days" -> "smoke-free", "sober days" -> "sober" - reuses
+    // daysLabel instead of adding yet another per-template field.
+    freeLabel: daysLabel.replace(/\s+days$/, ""),
   };
 }
 

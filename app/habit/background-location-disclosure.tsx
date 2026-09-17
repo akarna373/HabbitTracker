@@ -8,6 +8,7 @@ import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenHeader } from "../../components/ScreenHeader";
 import { ensureBackgroundLocationPermission } from "../../lib/location";
 import { useStore } from "../../lib/store";
+import { getQuitCopy } from "../../lib/templates";
 import { colors, spacing, typography } from "../../lib/theme";
 
 // Google Play requires a "prominent disclosure" explaining background
@@ -16,6 +17,8 @@ import { colors, spacing, typography } from "../../lib/theme";
 export default function BackgroundLocationDisclosureScreen() {
   const { habitId } = useLocalSearchParams<{ habitId: string }>();
   const setBackgroundLocationTracking = useStore((s) => s.setBackgroundLocationTracking);
+  const habit = useStore((s) => s.habits.find((h) => h.id === habitId));
+  const { locationNoun } = getQuitCopy(habit?.templateId);
   // "battery" step only shows after permission is actually granted - it's the
   // separate, optional nudge for reliable detection, not part of the disclosure.
   const [step, setStep] = useState<"disclosure" | "battery">("disclosure");
@@ -56,7 +59,7 @@ export default function BackgroundLocationDisclosureScreen() {
       <ScreenHeader title="Background location" subtitle="Before you turn this on" />
       <ScrollView contentContainerStyle={styles.content}>
         <Card highlighted>
-          <Text style={styles.bullet}>• Warns you when you're at a marked smoking spot, even with the app closed</Text>
+          <Text style={styles.bullet}>• Warns you when you're at a marked {locationNoun} spot, even with the app closed</Text>
           <Text style={styles.bullet}>• Checked only against your own logged spots, on this device - never sent anywhere</Text>
           <Text style={styles.bullet}>• Optional - turn off anytime from this habit's page</Text>
         </Card>
