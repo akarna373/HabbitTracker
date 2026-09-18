@@ -1,4 +1,4 @@
-import { addDays, daysBetween, last7Days, last7DaysEndingDaysAgo, todayISO } from "./dates";
+import { addDays, daysBetween, isoDate, last7Days, last7DaysEndingDaysAgo, todayISO } from "./dates";
 import type { DailyLog, Habit } from "./types";
 
 export function selectLogForDate(logs: DailyLog[] | undefined, date: string): DailyLog | undefined {
@@ -58,16 +58,25 @@ export function baselineCost(habit: Habit): number {
 // target declines linearly to 0 by day 14, and stays at 0 after (maintenance).
 export const REDUCE_CYCLE_DAYS = 14;
 
-export function reduceCycleDayForDate(habit: Habit, date: string): number {
-  const createdDate = habit.createdAt.slice(0, 10);
-  return daysBetween(createdDate, date) + 1;
+type ReduceCycleHabit = Pick<Habit, "createdAt" | "baselineQuantity" | "reduceDays">;
+
+// createdAt is a UTC ISO string but every other date here is the device's
+// local date - slicing it directly puts a habit created late evening (west
+// of UTC) or early morning (east of it) on the wrong day, which shifts every
+// "Day N of M" by one.
+function createdLocalDate(habit: Pick<Habit, "createdAt">): string {
+  return isoDate(new Date(habit.createdAt));
+}
+
+export function reduceCycleDayForDate(habit: Pick<Habit, "createdAt">, date: string): number {
+  return daysBetween(createdLocalDate(habit), date) + 1;
 }
 
 export function reduceCycleDay(habit: Habit): number {
   return reduceCycleDayForDate(habit, todayISO());
 }
 
-export function reduceDailyTargetForDate(habit: Habit, date: string): number {
+export function reduceDailyTargetForDate(habit: ReduceCycleHabit, date: string): number {
   if (!habit.baselineQuantity) return 0;
   const cycleDays = habit.reduceDays ?? REDUCE_CYCLE_DAYS;
   const day = Math.max(1, reduceCycleDayForDate(habit, date));

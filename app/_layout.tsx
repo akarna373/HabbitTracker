@@ -9,6 +9,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { colors } from "../lib/theme";
 import { useStore } from "../lib/store";
 import { hasSeenOnboarding } from "../lib/onboarding";
+import { subscribeToNotificationOpens } from "../lib/notifications";
 import { ConfirmDialogHost } from "../components/ConfirmDialog";
 import { OptionSheetHost } from "../components/OptionSheet";
 // Side-effect only: registers the geofencing TaskManager task at module
@@ -46,6 +47,20 @@ export default function RootLayout() {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [appReady]);
+
+  // Tapping a habit's notification (or one of its buttons that opens the app)
+  // lands on that habit, with Home directly underneath it so Back goes Home
+  // and never to whatever screen the app happened to be on.
+  useEffect(() => {
+    if (!appReady || seenOnboarding === false) return;
+    return subscribeToNotificationOpens((habitId) => {
+      router.dismissAll();
+      router.navigate("/");
+      if (useStore.getState().habits.some((h) => h.id === habitId)) {
+        router.push(`/habit/${habitId}`);
+      }
+    });
+  }, [appReady, seenOnboarding]);
 
   if (!appReady) {
     return <View style={styles.loading} />;

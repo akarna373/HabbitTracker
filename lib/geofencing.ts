@@ -1,30 +1,22 @@
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
-import Storage from "expo-sqlite/kv-store";
 import { getDb } from "./db";
 import { findHotspots, HOTSPOT_RADIUS_METERS } from "./location";
-import { scheduleImmediateNotification } from "./notifications";
+import { scheduleHotspotDeterrentNotification } from "./notifications";
 import type { SmokeLocation } from "./types";
 
 export const GEOFENCE_TASK_NAME = "smoke-location-geofence";
 
-// Skip re-notifying for the same habit's hotspot within this window - the OS
-// can re-fire Enter events while the user is just lingering at the spot.
-const COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours
-
-async function getLastNotifiedAt(habitId: string): Promise<number> {
-  const raw = await Storage.getItem(`geofence-cooldown:${habitId}`);
-  return raw ? Number(raw) : 0;
-}
-
-async function setLastNotifiedAt(habitId: string): Promise<void> {
-  await Storage.setItem(`geofence-cooldown:${habitId}`, String(Date.now()));
-}
+// Android's geofencing is unreliable for small circles - Google recommends at
+// least ~100-150 m, since it relies on Wi-Fi/cell positioning. The clustering
+// radius (HOTSPOT_RADIUS_METERS, 75 m) stays as is; only the registered region
+// is widened, so entering the spot's surroundings still raises the alert.
+const GEOFENCE_RADIUS_METERS = 150;
 
 // Defined at module scope (imported unconditionally from app/_layout.tsx) so
 // Android can invoke it headlessly - with no app UI running - which means it
 // can't rely on the Zustand store or any React context, only plain DB/module
-// calls like getDb() and scheduleImmediateNotification.
+// calls like getDb() and scheduleHotspotDeterrentNotification.
 TaskManager.defineTask(GEOFENCE_TASK_NAME, async ({ data, error }) => {
   if (error) return;
   const { eventType, region } = (data ?? {}) as {
@@ -36,18 +28,18 @@ TaskManager.defineTask(GEOFENCE_TASK_NAME, async ({ data, error }) => {
   const [habitId] = region.identifier.split("::");
   if (!habitId) return;
 
-  const lastNotifiedAt = await getLastNotifiedAt(habitId);
-  if (Date.now() - lastNotifiedAt < COOLDOWN_MS) return;
-
+  // Each region belongs to one habit, so this alerts only that habit, worded
+  // for it, with its own action buttons. The shared cooldown inside
+  // scheduleHotspotDeterrentNotification stops repeats (the OS re-fires Enter
+  // while the user lingers, and overlapping regions fire together).
   const db = await getDb();
-  const habit = await db.getFirstAsync<{ id: string }>("SELECT id FROM habits WHERE id = ?", [habitId]);
-  if (!habit) return;
-
-  await scheduleImmediateNotification(
-    "You're at your smoking location",
-    "Please move away from this spot - it's better for your health and your finances."
+  const habit = await db.getFirstAsync<{ id: string; templateId: string; locationTrackingEnabled: number }>(
+    "SELECT id, templateId, locationTrackingEnabled FROM habits WHERE id = ? AND archivedAt IS NULL",
+    [habitId]
   );
-  await setLastNotifiedAt(habitId);
+  if (!habit || !habit.locationTrackingEnabled) return;
+
+  await scheduleHotspotDeterrentNotification(habit.id, habit.templateId);
 });
 
 interface HabitForSync {
@@ -74,7 +66,7 @@ export async function syncGeofences(
         identifier: `${habit.id}::${index}`,
         latitude: hotspot.latitude,
         longitude: hotspot.longitude,
-        radius: HOTSPOT_RADIUS_METERS,
+        radius: GEOFENCE_RADIUS_METERS,
       });
     });
   }

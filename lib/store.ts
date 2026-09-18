@@ -7,21 +7,14 @@ import { syncGeofences } from "./geofencing";
 import {
   adjustStock,
   cancelNotification,
-  computeNextOccurrence,
   scheduleDailyNotification,
   scheduleIntervalReminder,
   scheduleMorningWalkReminder,
-  scheduleOneTimeNotification,
+  scheduleReduceSummary,
 } from "./notifications";
-import {
-  buildCheckupNotification,
-  buildDailySummaryNotification,
-  buildReduceSummaryNotification,
-  buildReminderNotification,
-} from "./notificationContent";
+import { buildCheckupNotification, buildDailySummaryNotification, buildReminderNotification } from "./notificationContent";
 import { cancelMedicationNotifications, scheduleMedicationNotifications } from "./medicationSchedule";
 import { parseDosageFrequency } from "./medicationParse";
-import { reduceCycleDay, reduceDailyTarget, REDUCE_CYCLE_DAYS } from "./progress";
 import { getSwipeSettings, saveSwipeSettings, type SwipeSettings } from "./swipeSettings";
 import { getCalendarType, saveCalendarType, type CalendarType } from "./calendarSettings";
 import type { DailyLog, GoalType, Habit, Microtask, NewHabitDraft, SmokeLocation } from "./types";
@@ -136,6 +129,32 @@ interface StoreState {
   addMicrotasks: (habitId: string, texts: string[]) => Promise<void>;
 }
 
+// Tonight's "reduce" summary embeds how much has been logged so far, so it has
+// to be rebuilt whenever today's count changes (an in-app tap or a notification
+// action). Serialized through one queue because each run cancels the previous
+// notification id - overlapping runs would leave an orphan that fires as a
+// duplicate. Reads the latest state when its turn comes; never throws.
+let reduceSummaryQueue: Promise<void> = Promise.resolve();
+
+function rescheduleReduceSummary(habitId: string): void {
+  reduceSummaryQueue = reduceSummaryQueue
+    .then(async () => {
+      const { habits, logsByHabit } = useStore.getState();
+      const habit = habits.find((h) => h.id === habitId);
+      if (!habit || habit.goalType !== "reduce" || !habit.hasCost || !habit.summaryTime) return;
+      const today = todayISO();
+      const todayAmount = logsByHabit[habitId]?.find((l) => l.date === today)?.amount ?? 0;
+      await cancelNotification(habit.summaryNotificationId);
+      const summaryNotificationId = await scheduleReduceSummary(habit, todayAmount);
+      const db = await getDb();
+      await db.runAsync("UPDATE habits SET summaryNotificationId = ? WHERE id = ?", [summaryNotificationId, habitId]);
+      useStore.setState((s) => ({
+        habits: s.habits.map((h) => (h.id === habitId ? { ...h, summaryNotificationId } : h)),
+      }));
+    })
+    .catch(() => {});
+}
+
 export const useStore = create<StoreState>((set, get) => ({
   ready: false,
   habits: [],
@@ -194,21 +213,14 @@ export const useStore = create<StoreState>((set, get) => ({
     // A "reduce" habit's nightly notification carries a declining target
     // that changes day to day - a DAILY trigger can't update its own text,
     // so re-derive and reschedule tonight's one-time notification on every
-    // app open instead (see lib/notifications.ts:scheduleOneTimeNotification).
+    // app open instead (see lib/notifications.ts:scheduleReduceSummary).
     const today = todayISO();
     for (let i = 0; i < habits.length; i++) {
       const habit = habits[i];
       if (habit.goalType !== "reduce" || !habit.hasCost || !habit.summaryTime) continue;
       await cancelNotification(habit.summaryNotificationId);
       const todayAmount = logsByHabit[habit.id]?.find((l) => l.date === today)?.amount ?? 0;
-      const { title, body } = buildReduceSummaryNotification({
-        day: reduceCycleDay(habit),
-        cycleDays: habit.reduceDays ?? REDUCE_CYCLE_DAYS,
-        target: reduceDailyTarget(habit),
-        todayAmount,
-        unit: habit.unit,
-      }).content;
-      const summaryNotificationId = await scheduleOneTimeNotification(title, body, computeNextOccurrence(habit.summaryTime));
+      const summaryNotificationId = await scheduleReduceSummary(habit, todayAmount);
       await db.runAsync("UPDATE habits SET summaryNotificationId = ? WHERE id = ?", [summaryNotificationId, habit.id]);
       habits[i] = { ...habit, summaryNotificationId };
     }
@@ -245,14 +257,16 @@ export const useStore = create<StoreState>((set, get) => ({
         startDate: draft.startDate ?? todayISO(),
       });
     } else if (draft.templateId === "doctor_checkup" && draft.checkupIntervalDays) {
-      const { title, body } = buildCheckupNotification(draft.name).content;
-      reminderNotificationId = await scheduleIntervalReminder(title, body, draft.checkupIntervalDays * 24 * 60 * 60);
+      const { title, body, data } = buildCheckupNotification(id, draft.name).content;
+      reminderNotificationId = await scheduleIntervalReminder(title, body, draft.checkupIntervalDays * 24 * 60 * 60, {
+        data,
+      });
     } else if (draft.reminderEnabled && draft.reminderTime) {
       if (draft.templateId === "walking_jogging") {
         reminderNotificationId = await scheduleMorningWalkReminder(id, draft.reminderTime);
       } else {
-        const { title, body } = buildReminderNotification(draft.name).content;
-        reminderNotificationId = await scheduleDailyNotification(title, body, draft.reminderTime);
+        const { title, body, data } = buildReminderNotification(id, draft.name).content;
+        reminderNotificationId = await scheduleDailyNotification(title, body, draft.reminderTime, { data });
       }
     }
 
@@ -262,18 +276,21 @@ export const useStore = create<StoreState>((set, get) => ({
         // Day 1 of the reduce cycle always starts at the full baseline
         // (day(N-1)/(N-1) = baseline) - a one-time notification, since a
         // DAILY trigger can't carry a target that changes as the cycle
-        // progresses (see reduceCycleDay/reduceDailyTarget in lib/progress.ts).
-        const { title, body } = buildReduceSummaryNotification({
-          day: 1,
-          cycleDays: draft.reduceDays ?? REDUCE_CYCLE_DAYS,
-          target: draft.baselineQuantity ?? 0,
-          todayAmount: 0,
-          unit: draft.unit,
-        }).content;
-        summaryNotificationId = await scheduleOneTimeNotification(title, body, computeNextOccurrence(draft.summaryTime));
+        // progresses (see scheduleReduceSummary in lib/notifications.ts).
+        summaryNotificationId = await scheduleReduceSummary(
+          {
+            id,
+            createdAt: now,
+            baselineQuantity: draft.baselineQuantity,
+            reduceDays: draft.reduceDays,
+            unit: draft.unit,
+            summaryTime: draft.summaryTime,
+          },
+          0
+        );
       } else {
-        const { title, body } = buildDailySummaryNotification(draft.name).content;
-        summaryNotificationId = await scheduleDailyNotification(title, body, draft.summaryTime);
+        const { title, body, data } = buildDailySummaryNotification(id, draft.name).content;
+        summaryNotificationId = await scheduleDailyNotification(title, body, draft.summaryTime, { data });
       }
     }
 
@@ -470,6 +487,7 @@ export const useStore = create<StoreState>((set, get) => ({
       habits: habitRow && !habitRow.archivedAt ? s.habits.map((h) => (h.id === habitId ? rowToHabit(habitRow) : h)) : s.habits,
       logsByHabit: { ...s.logsByHabit, [habitId]: logRows.map(rowToLog) },
     }));
+    rescheduleReduceSummary(habitId);
   },
 
   incrementAmount: async (habitId, date, delta) => {
@@ -495,6 +513,8 @@ export const useStore = create<StoreState>((set, get) => ({
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
+
+    if (date === todayISO()) rescheduleReduceSummary(habitId);
 
     // Logging a cigarette (never undoing one) on a location-tracked habit
     // silently records where the user is - runs in the background so it
@@ -635,17 +655,10 @@ export const useStore = create<StoreState>((set, get) => ({
       if (goalType === "reduce") {
         const today = todayISO();
         const todayAmount = get().logsByHabit[habitId]?.find((l) => l.date === today)?.amount ?? 0;
-        const { title, body } = buildReduceSummaryNotification({
-          day: reduceCycleDay(updatedHabit),
-          cycleDays: reduceDays ?? REDUCE_CYCLE_DAYS,
-          target: reduceDailyTarget(updatedHabit),
-          todayAmount,
-          unit: updatedHabit.unit,
-        }).content;
-        summaryNotificationId = await scheduleOneTimeNotification(title, body, computeNextOccurrence(updatedHabit.summaryTime));
+        summaryNotificationId = await scheduleReduceSummary(updatedHabit, todayAmount);
       } else {
-        const { title, body } = buildDailySummaryNotification(updatedHabit.name).content;
-        summaryNotificationId = await scheduleDailyNotification(title, body, updatedHabit.summaryTime);
+        const { title, body, data } = buildDailySummaryNotification(habitId, updatedHabit.name).content;
+        summaryNotificationId = await scheduleDailyNotification(title, body, updatedHabit.summaryTime, { data });
       }
     }
 
@@ -733,8 +746,8 @@ export const useStore = create<StoreState>((set, get) => ({
     await cancelNotification(habit.reminderNotificationId);
     let reminderNotificationId: string | null = null;
     if (enabled && time) {
-      const { title, body } = buildReminderNotification(habit.name).content;
-      reminderNotificationId = await scheduleDailyNotification(title, body, time);
+      const { title, body, data } = buildReminderNotification(habitId, habit.name).content;
+      reminderNotificationId = await scheduleDailyNotification(title, body, time, { data });
     }
 
     await db.runAsync(

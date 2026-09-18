@@ -47,12 +47,12 @@ export interface BuiltNotification {
 }
 
 // Fixed category specs - registered once at module load (lib/notifications.ts).
-// Opens the app to the foreground on the affirmative actions: the app has no
-// background task for notification responses, so with the process killed a
-// false here means the JS listener never runs at all.
+// No action opens the app to the foreground: tapping one logs straight to the
+// DB through the background task in lib/notifications.ts, so it works with the
+// app killed. Only tapping the notification body opens the app.
 export const WALK_CATEGORY: NotificationCategorySpec = {
   id: WALK_CATEGORY_ID,
-  actions: [{ identifier: WALK_ACTION_ID, buttonTitle: "I went for a walk", opensAppToForeground: true }],
+  actions: [{ identifier: WALK_ACTION_ID, buttonTitle: "I went for a walk", opensAppToForeground: false }],
 };
 
 // Dismiss needs no handler branch - the response listener only acts on
@@ -60,7 +60,7 @@ export const WALK_CATEGORY: NotificationCategorySpec = {
 export const DOSE_CATEGORY: NotificationCategorySpec = {
   id: DOSE_CATEGORY_ID,
   actions: [
-    { identifier: DOSE_ACTION_ID, buttonTitle: "I took it", opensAppToForeground: true },
+    { identifier: DOSE_ACTION_ID, buttonTitle: "I took it", opensAppToForeground: false },
     { identifier: DOSE_DISMISS_ACTION_ID, buttonTitle: "Dismiss", opensAppToForeground: false, isDestructive: true },
   ],
 };
@@ -71,15 +71,18 @@ export function hotspotCategory(habitId: string, verb: string): NotificationCate
   return {
     id: `hotspot-${habitId}`,
     actions: [
-      { identifier: HOTSPOT_YES_ACTION_ID, buttonTitle: `I ${verb}`, opensAppToForeground: true },
-      { identifier: HOTSPOT_NO_ACTION_ID, buttonTitle: "I didn't", opensAppToForeground: true },
+      { identifier: HOTSPOT_YES_ACTION_ID, buttonTitle: `I ${verb}`, opensAppToForeground: false },
+      { identifier: HOTSPOT_NO_ACTION_ID, buttonTitle: "I didn't", opensAppToForeground: false },
       { identifier: HOTSPOT_DISMISS_ACTION_ID, buttonTitle: "Dismiss", opensAppToForeground: false, isDestructive: true },
     ],
   };
 }
 
-export function buildReminderNotification(name: string): BuiltNotification {
-  return { content: { title: name, body: "A gentle reminder to check in today." } };
+// Every habit-owned notification carries data.habitId so tapping it (or an
+// action that opens the app) can land on that habit - see
+// subscribeToNotificationOpens in lib/notifications.ts.
+export function buildReminderNotification(habitId: string, name: string): BuiltNotification {
+  return { content: { title: name, body: "A gentle reminder to check in today.", data: { habitId } } };
 }
 
 export function buildWalkNotification(habitId: string): BuiltNotification {
@@ -94,8 +97,14 @@ export function buildWalkNotification(habitId: string): BuiltNotification {
   };
 }
 
-export function buildCheckupNotification(name: string): BuiltNotification {
-  return { content: { title: "Time for a checkup", body: `It's been a while - book your ${name.toLowerCase()}.` } };
+export function buildCheckupNotification(habitId: string, name: string): BuiltNotification {
+  return {
+    content: {
+      title: "Time for a checkup",
+      body: `It's been a while - book your ${name.toLowerCase()}.`,
+      data: { habitId },
+    },
+  };
 }
 
 // `dayNumber`/`durationDays` are set for a fixed-length course ("...dose 2 of
@@ -126,34 +135,42 @@ export function buildDoseNotification(params: {
   };
 }
 
-export function buildDailySummaryNotification(name: string): BuiltNotification {
-  return { content: { title: "Your 10 PM summary", body: `See how today compared for ${name}.` } };
+export function buildDailySummaryNotification(habitId: string, name: string): BuiltNotification {
+  return {
+    content: { title: "Your 10 PM summary", body: `See how today compared for ${name}.`, data: { habitId } },
+  };
 }
 
+// `todayAmount` is null when the notification fires on a later day than it was
+// scheduled - the count logged by then is unknown, so that sentence is left out
+// rather than showing a stale number.
 export function buildReduceSummaryNotification(params: {
+  habitId: string;
   day: number;
   cycleDays: number;
   target: number;
-  todayAmount: number;
+  todayAmount: number | null;
   unit: string | null;
 }): BuiltNotification {
-  const { day, cycleDays, target, todayAmount, unit } = params;
+  const { habitId, day, cycleDays, target, todayAmount, unit } = params;
   const inCycle = day <= cycleDays;
+  const body = inCycle
+    ? `Today's target: ${target} ${unit ?? ""}.${todayAmount === null ? "" : ` You've logged ${todayAmount} so far.`}`
+    : `You've reached your zero target.${todayAmount === null ? "" : ` You've logged ${todayAmount} today.`}`;
   return {
-    content: {
-      title: inCycle ? `Day ${day} of ${cycleDays}` : "Reduction complete",
-      body: inCycle
-        ? `Today's target: ${target} ${unit ?? ""}. You've logged ${todayAmount} so far.`
-        : `You've reached your zero target. You've logged ${todayAmount} today.`,
-    },
+    content: { title: inCycle ? `Day ${day} of ${cycleDays}` : "Reduction complete", body, data: { habitId } },
   };
 }
 
 // Sent through the deterrent channel because that is what the real low-stock
 // alert uses (scheduleImmediateNotification).
-export function buildLowStockNotification(name: string, remaining: number): BuiltNotification {
+export function buildLowStockNotification(habitId: string, name: string, remaining: number): BuiltNotification {
   return {
-    content: { title: `Running low on ${name}`, body: `Only ${remaining} left - time to restock.` },
+    content: {
+      title: `Running low on ${name}`,
+      body: `Only ${remaining} left - time to restock.`,
+      data: { habitId },
+    },
     channelId: DETERRENT_CHANNEL_ID,
   };
 }
@@ -199,15 +216,15 @@ export function buildHabitTestNotifications(habit: Habit, todayAmount: number): 
       }),
     });
     if (habit.stockRemaining !== null) {
-      out.push({ label: "low-stock alert", built: buildLowStockNotification(habit.name, habit.stockRemaining) });
+      out.push({ label: "low-stock alert", built: buildLowStockNotification(habit.id, habit.name, habit.stockRemaining) });
     }
   } else if (habit.templateId === "doctor_checkup" && habit.checkupIntervalDays) {
-    out.push({ label: "checkup reminder", built: buildCheckupNotification(habit.name) });
+    out.push({ label: "checkup reminder", built: buildCheckupNotification(habit.id, habit.name) });
   } else if (habit.reminderEnabled && habit.reminderTime) {
     out.push(
       habit.templateId === "walking_jogging"
         ? { label: "morning walk reminder", built: buildWalkNotification(habit.id) }
-        : { label: "daily reminder", built: buildReminderNotification(habit.name) }
+        : { label: "daily reminder", built: buildReminderNotification(habit.id, habit.name) }
     );
   }
 
@@ -217,13 +234,14 @@ export function buildHabitTestNotifications(habit: Habit, todayAmount: number): 
       built:
         habit.goalType === "reduce"
           ? buildReduceSummaryNotification({
+              habitId: habit.id,
               day: reduceCycleDay(habit),
               cycleDays: habit.reduceDays ?? REDUCE_CYCLE_DAYS,
               target: reduceDailyTarget(habit),
               todayAmount,
               unit: habit.unit,
             })
-          : buildDailySummaryNotification(habit.name),
+          : buildDailySummaryNotification(habit.id, habit.name),
     });
   }
 
