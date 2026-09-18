@@ -3,6 +3,13 @@ import { getDb } from "./db";
 import { genId } from "./id";
 import { todayISO } from "./dates";
 import { getCurrentLocation } from "./location";
+import { setActiveCurrencyCode } from "./currency";
+import {
+  DEFAULT_FINANCIAL_SETTINGS,
+  isValidMonthlyGoal,
+  normalizeCurrencyCode,
+  sanitizeFinancialSettings,
+} from "./financialSettings";
 import { syncGeofences } from "./geofencing";
 import {
   adjustStock,
@@ -16,7 +23,7 @@ import { cancelMedicationNotifications, scheduleMedicationNotifications } from "
 import { parseDosageFrequency } from "./medicationParse";
 import { getSwipeSettings, saveSwipeSettings, type SwipeSettings } from "./swipeSettings";
 import { getCalendarType, saveCalendarType, type CalendarType } from "./calendarSettings";
-import type { DailyLog, GoalType, Habit, Microtask, NewHabitDraft, SmokeLocation } from "./types";
+import type { DailyLog, FinancialSettings, GoalType, Habit, Microtask, NewHabitDraft, SmokeLocation } from "./types";
 
 interface HabitRow {
   id: string;
@@ -104,6 +111,8 @@ interface StoreState {
   setSwipeSettings: (settings: Partial<SwipeSettings>) => Promise<void>;
   calendarType: CalendarType;
   setCalendarType: (type: CalendarType) => Promise<void>;
+  financialSettings: FinancialSettings;
+  updateFinancialSettings: (changes: Partial<FinancialSettings>) => Promise<void>;
   init: () => Promise<void>;
   createHabit: (draft: NewHabitDraft) => Promise<string>;
   deleteHabit: (habitId: string) => Promise<void>;
@@ -137,6 +146,7 @@ export const useStore = create<StoreState>((set, get) => ({
   smokeLocationsByHabit: {},
   swipeSettings: { deleteEnabled: true, archiveEnabled: true },
   calendarType: "gregorian",
+  financialSettings: DEFAULT_FINANCIAL_SETTINGS,
 
   setSwipeSettings: async (partial) => {
     const next = { ...get().swipeSettings, ...partial };
@@ -147,6 +157,30 @@ export const useStore = create<StoreState>((set, get) => ({
   setCalendarType: async (type) => {
     await saveCalendarType(type);
     set({ calendarType: type });
+  },
+
+  // Saves the monthly goal and/or currency. A goal of null removes it; an
+  // invalid goal or currency is ignored (the screens validate first, this is the
+  // last line of defence so bad input can never reach the database).
+  updateFinancialSettings: async (changes) => {
+    const current = get().financialSettings;
+    const next: FinancialSettings = { ...current };
+    if (changes.monthlyGoal !== undefined) {
+      if (changes.monthlyGoal !== null && !isValidMonthlyGoal(changes.monthlyGoal)) return;
+      next.monthlyGoal = changes.monthlyGoal;
+    }
+    if (changes.currencyCode !== undefined) {
+      const code = normalizeCurrencyCode(changes.currencyCode);
+      if (code === null) return;
+      next.currencyCode = code;
+    }
+    const db = await getDb();
+    await db.runAsync(
+      "INSERT INTO financial_settings (id, monthlyGoal, currencyCode) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET monthlyGoal = excluded.monthlyGoal, currencyCode = excluded.currencyCode",
+      [next.monthlyGoal, next.currencyCode]
+    );
+    setActiveCurrencyCode(next.currencyCode);
+    set({ financialSettings: next });
   },
 
   init: async () => {
@@ -177,6 +211,13 @@ export const useStore = create<StoreState>((set, get) => ({
       (logsByHabit[row.habitId] ??= []).push(rowToLog(row));
     }
 
+    const financialSettings = sanitizeFinancialSettings(
+      await db.getFirstAsync<{ monthlyGoal: number | null; currencyCode: string }>(
+        "SELECT monthlyGoal, currencyCode FROM financial_settings WHERE id = 1"
+      )
+    );
+    setActiveCurrencyCode(financialSettings.currencyCode);
+
     const smokeLocationRows = await db.getAllAsync<SmokeLocation>("SELECT * FROM smoke_locations");
     const smokeLocationsByHabit: Record<string, SmokeLocation[]> = {};
     for (const row of smokeLocationRows) {
@@ -193,7 +234,17 @@ export const useStore = create<StoreState>((set, get) => ({
       habits[i] = { ...habit, summaryNotificationId: null };
     }
 
-    set({ ready: true, habits, archivedHabits, microtasksByHabit, logsByHabit, smokeLocationsByHabit, swipeSettings, calendarType });
+    set({
+      ready: true,
+      habits,
+      archivedHabits,
+      microtasksByHabit,
+      logsByHabit,
+      smokeLocationsByHabit,
+      swipeSettings,
+      calendarType,
+      financialSettings,
+    });
 
     // Android clears registered geofences on reboot, so re-register on every
     // app open - same defensive pattern as the notification reschedule above.

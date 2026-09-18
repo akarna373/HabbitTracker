@@ -56,6 +56,12 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
           longitude REAL NOT NULL,
           loggedAt TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS financial_settings (
+          id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+          monthlyGoal REAL,
+          currencyCode TEXT NOT NULL DEFAULT 'NPR'
+        );
+        INSERT OR IGNORE INTO financial_settings (id, monthlyGoal, currencyCode) VALUES (1, NULL, 'NPR');
       `);
       // CREATE TABLE IF NOT EXISTS never alters an already-existing table,
       // so a habits table created before locationTrackingEnabled existed is

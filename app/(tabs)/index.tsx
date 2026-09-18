@@ -4,8 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
 import { HeaderMenu } from "../../components/HeaderMenu";
 import { ProfileBadge } from "../../components/ProfileBadge";
-import { ProgressBar } from "../../components/ProgressBar";
 import { SpeedDialFab } from "../../components/SpeedDialFab";
+import { SummaryDashboardCard } from "../../components/SummaryDashboardCard";
 import { SwipeableHabitTile } from "../../components/SwipeableHabitTile";
 import { formatLongDate, todayISO } from "../../lib/dates";
 import { getTodayDoseTimes } from "../../lib/medicationSchedule";
@@ -18,8 +18,6 @@ export default function TodayScreen() {
   const habits = useStore((s) => s.habits);
   const logsByHabit = useStore((s) => s.logsByHabit);
   const today = todayISO();
-
-  const completedCount = habits.filter((h) => isHabitCompleteOn(h, logsByHabit[h.id], today)).length;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -40,18 +38,7 @@ export default function TodayScreen() {
             <Text style={styles.title}>A little better, daily.</Text>
             <Text style={styles.date}>{formatLongDate(today)}</Text>
 
-            <Card highlighted>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryTitle}>Today's habits</Text>
-                <Text style={styles.summaryCount}>
-                  {completedCount} of {habits.length}
-                </Text>
-              </View>
-              <View style={{ marginVertical: spacing.sm }}>
-                <ProgressBar progress={habits.length ? completedCount / habits.length : 0} />
-              </View>
-              <Text style={styles.summaryCaption}>Small steps count. Keep showing up.</Text>
-            </Card>
+            <SummaryDashboardCard />
           </View>
         }
         renderItem={({ item }) => <TodayHabitTile habit={item} logs={logsByHabit[item.id]} today={today} />}
@@ -131,10 +118,6 @@ const styles = StyleSheet.create({
   brandActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   title: { ...typography.title, fontSize: 20 },
   date: { ...typography.caption, marginBottom: spacing.md },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  summaryTitle: { ...typography.body, fontWeight: "700" },
-  summaryCount: { ...typography.body, color: colors.accentPink, fontWeight: "700" },
-  summaryCaption: { ...typography.caption },
   emptyTitle: { ...typography.body, fontWeight: "700", marginBottom: 4 },
   emptyBody: { ...typography.caption },
 });

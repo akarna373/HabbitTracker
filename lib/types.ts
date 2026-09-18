@@ -51,6 +51,11 @@ export interface Habit {
   archivedAt: string | null;
 }
 
+export interface FinancialSettings {
+  monthlyGoal: number | null; // optional monthly savings goal, in the currency below
+  currencyCode: string; // ISO-style three-letter code, e.g. "NPR"
+}
+
 export interface SmokeLocation {
   id: string;
   habitId: string;
