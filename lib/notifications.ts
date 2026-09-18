@@ -267,7 +267,7 @@ export async function scheduleHotspotDeterrentNotification(
 
 // Minimum gap between hotspot alerts for one habit - also restarted by an "I
 // smoked" tap, so logging one never triggers another alert straight away.
-const HOTSPOT_COOLDOWN_MS = 60 * 60 * 1000;
+const HOTSPOT_COOLDOWN_MS = 15 * 60 * 1000;
 
 function hotspotCooldownKey(habitId: string): string {
   return `hotspot-cooldown:${habitId}`;
