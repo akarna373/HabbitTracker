@@ -7,6 +7,7 @@ import { isoDate, todayISO } from "./dates";
 import { reduceCycleDayForDate, reduceDailyTargetForDate, REDUCE_CYCLE_DAYS } from "./progress";
 import { parseDosageFrequency } from "./medicationParse";
 import {
+  buildEncouragementNotification,
   buildHabitTestNotifications,
   buildHotspotNotification,
   buildLowStockNotification,
@@ -380,12 +381,20 @@ async function handleNotificationAction(response: NotificationResponse): Promise
   const data = readActionData(content);
   testLog("action pressed", { identifier, actionIdentifier, data });
 
+  const habitId = data?.habitId;
+
+  if (actionIdentifier === HOTSPOT_NO_ACTION_ID && typeof habitId === "string") {
+    // "I didn't" - the count is left alone; the alert is swapped for a short
+    // encouragement worded for this habit instead of just vanishing.
+    await showEncouragement(identifier, habitId);
+    return;
+  }
+
   // Android never removes a notification when one of its action buttons is
   // tapped (neither the OS nor expo-notifications does it) - without this
   // every button would leave the alert sitting in the shade.
   await Notifications?.dismissNotificationAsync(identifier).catch(() => {});
 
-  const habitId = data?.habitId;
   if (typeof habitId !== "string") return;
   if (actionIdentifier === WALK_ACTION_ID) {
     await markCheckedInToday(habitId);
@@ -397,10 +406,20 @@ async function handleNotificationAction(response: NotificationResponse): Promise
     await incrementHabitAmountToday(habitId, 1);
     startHotspotCooldown(habitId);
   } else {
-    // "I didn't" and the Dismiss buttons leave the count alone.
+    // The Dismiss buttons leave the count alone.
     return;
   }
   await refreshStoreForHabit(habitId);
+}
+
+// Posting with the alert's own identifier replaces it in the shade (Android keys
+// a notification by identifier), so this needs no separate dismiss.
+async function showEncouragement(alertIdentifier: string, habitId: string): Promise<void> {
+  if (!Notifications) return;
+  const db = await getDb();
+  const habit = await db.getFirstAsync<{ templateId: string }>("SELECT templateId FROM habits WHERE id = ?", [habitId]);
+  const { content } = buildEncouragementNotification(habitId, habit?.templateId);
+  await Notifications.scheduleNotificationAsync({ identifier: alertIdentifier, content, trigger: null });
 }
 
 if (Notifications) {

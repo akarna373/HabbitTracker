@@ -1,4 +1,5 @@
 import { parseDosageFrequency, parseDurationDays } from "./medicationParse";
+import { pickEncouragementMessage } from "./motivation";
 import { reduceCycleDay, reduceDailyTarget, REDUCE_CYCLE_DAYS } from "./progress";
 import { getQuitCopy } from "./templates";
 import type { Habit } from "./types";
@@ -186,6 +187,15 @@ export function buildHotspotNotification(habitId: string, templateId: string | n
     },
     channelId: DETERRENT_CHANNEL_ID,
     category: hotspotCategory(habitId, verb),
+  };
+}
+
+// Replaces the hotspot alert after "I didn't" (same identifier - see
+// handleNotificationAction). No buttons and no deterrent channel: it is praise,
+// not a warning, so it shouldn't buzz like one. Tapping it opens the habit.
+export function buildEncouragementNotification(habitId: string, templateId: string | null | undefined): BuiltNotification {
+  return {
+    content: { title: "Well done", body: pickEncouragementMessage(templateId), data: { habitId } },
   };
 }
 

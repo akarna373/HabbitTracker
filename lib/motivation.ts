@@ -46,6 +46,53 @@ const MESSAGES_BY_TEMPLATE: Record<string, string[]> = {
   panmasala: PANMASALA_MESSAGES,
 };
 
+// Shown right after the user taps "I didn't" on a hotspot alert - praise for
+// resisting, worded for the habit (the pools above talk the user out of the
+// next one instead). Same fallback rule as MESSAGES_BY_TEMPLATE.
+const SMOKING_ENCOURAGEMENT = [
+  "You walked past the urge without lighting up. That is real strength.",
+  "One cigarette skipped - your lungs and heart just got a small win.",
+  "The craving will fade in a few minutes, and you didn't feed it. Keep going.",
+  "Every smoke-free moment is more time with the people who love you.",
+  "You chose yourself over the habit. That gets easier each time.",
+  "That's money kept and breath saved. Proud of you.",
+];
+
+const ALCOHOL_ENCOURAGEMENT = [
+  "You held your ground and skipped the drink. Well done.",
+  "One drink less tonight means clearer thoughts and better sleep tomorrow.",
+  "The urge passes whether you pour one or not - and you didn't. Keep it up.",
+  "You chose a clear head over the habit. That gets easier each time.",
+  "Your liver, your wallet and your family all just got a win.",
+  "Tomorrow's you will thank tonight's you. Stay strong.",
+];
+
+const PANMASALA_ENCOURAGEMENT = [
+  "You said no to the chew. Your mouth and gums thank you.",
+  "One less chew means one less hit on your gums and jaw. Well done.",
+  "The craving fades in a few minutes, and you didn't give in. Keep going.",
+  "You chose your health over the habit. That gets easier each time.",
+  "That's money kept and a healthier mouth. Proud of you.",
+  "Every chew you skip protects your long-term health. Stay strong.",
+];
+
+const GENERIC_ENCOURAGEMENT = [
+  "You resisted the urge. That takes real strength - well done.",
+  "The craving fades whether you give in or not, and you didn't. Keep going.",
+  "You chose yourself over the habit. That gets easier each time.",
+];
+
+const ENCOURAGEMENT_BY_TEMPLATE: Record<string, string[]> = {
+  smoking: SMOKING_ENCOURAGEMENT,
+  alcohol: ALCOHOL_ENCOURAGEMENT,
+  panmasala: PANMASALA_ENCOURAGEMENT,
+};
+
+export function pickEncouragementMessage(templateId?: string | null): string {
+  const pool = (templateId && ENCOURAGEMENT_BY_TEMPLATE[templateId]) || GENERIC_ENCOURAGEMENT;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export function pickMotivationMessage(templateId?: string): string {
   const pool = (templateId && MESSAGES_BY_TEMPLATE[templateId]) || SMOKING_MESSAGES;
   const index = Math.floor(Math.random() * pool.length);
