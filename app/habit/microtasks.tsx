@@ -127,9 +127,6 @@ export default function MicrotasksScreen() {
           {draft.reminderEnabled && draft.reminderTime ? (
             <Text style={styles.summaryBody}>Reminder at {formatTime12h(draft.reminderTime)}</Text>
           ) : null}
-          {draft.hasCost && draft.summaryTime ? (
-            <Text style={styles.summaryBody}>Night summary at {formatTime12h(draft.summaryTime)}</Text>
-          ) : null}
         </Card>
 
         <View style={{ height: spacing.md }} />

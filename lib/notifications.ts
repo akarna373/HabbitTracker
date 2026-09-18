@@ -3,8 +3,7 @@ import * as TaskManager from "expo-task-manager";
 import type { NotificationResponse, NotificationTaskPayload } from "expo-notifications";
 import { getDb } from "./db";
 import { genId } from "./id";
-import { isoDate, todayISO } from "./dates";
-import { reduceCycleDayForDate, reduceDailyTargetForDate, REDUCE_CYCLE_DAYS } from "./progress";
+import { todayISO } from "./dates";
 import { parseDosageFrequency } from "./medicationParse";
 import {
   buildEncouragementNotification,
@@ -12,7 +11,6 @@ import {
   buildHotspotNotification,
   buildLowStockNotification,
   buildMissedDoseFollowUpNotification,
-  buildReduceSummaryNotification,
   buildWalkNotification,
   DETERRENT_CHANNEL_ID,
   DOSE_ACTION_ID,
@@ -289,37 +287,6 @@ function claimHotspotSlot(habitId: string): boolean {
 
 function startHotspotCooldown(habitId: string): void {
   Storage.setItemSync(hotspotCooldownKey(habitId), String(Date.now()));
-}
-
-// The nightly summary of a "reduce" goal. Its day number and target change
-// every day and a scheduled notification can't update its own text, so this
-// works out both for the day it will actually FIRE on (tonight, or tomorrow if
-// tonight's time has already passed) - not for today, which showed "Day 1" on
-// day 2 whenever the habit was created or the app opened after summary time.
-// The "logged so far" count is only included when it fires today.
-export async function scheduleReduceSummary(
-  habit: {
-    id: string;
-    createdAt: string;
-    baselineQuantity: number | null;
-    reduceDays: number | null;
-    unit: string | null;
-    summaryTime: string | null;
-  },
-  todayAmount: number
-): Promise<string | null> {
-  if (!habit.summaryTime) return null;
-  const fireAt = computeNextOccurrence(habit.summaryTime);
-  const fireDate = isoDate(fireAt);
-  const { title, body, data } = buildReduceSummaryNotification({
-    habitId: habit.id,
-    day: reduceCycleDayForDate(habit, fireDate),
-    cycleDays: habit.reduceDays ?? REDUCE_CYCLE_DAYS,
-    target: reduceDailyTargetForDate(habit, fireDate),
-    todayAmount: fireDate === todayISO() ? todayAmount : null,
-    unit: habit.unit,
-  }).content;
-  return scheduleOneTimeNotification(title, body, fireAt, { data });
 }
 
 // The actions below write straight to the DB (no React tree may be mounted),

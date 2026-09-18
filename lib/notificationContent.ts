@@ -1,6 +1,5 @@
 import { parseDosageFrequency, parseDurationDays } from "./medicationParse";
 import { pickEncouragementMessage } from "./motivation";
-import { reduceCycleDay, reduceDailyTarget, REDUCE_CYCLE_DAYS } from "./progress";
 import { getQuitCopy } from "./templates";
 import type { Habit } from "./types";
 
@@ -169,33 +168,6 @@ export function buildMissedDoseFollowUpNotification(habitId: string, name: strin
   };
 }
 
-export function buildDailySummaryNotification(habitId: string, name: string): BuiltNotification {
-  return {
-    content: { title: "Your 10 PM summary", body: `See how today compared for ${name}.`, data: { habitId } },
-  };
-}
-
-// `todayAmount` is null when the notification fires on a later day than it was
-// scheduled - the count logged by then is unknown, so that sentence is left out
-// rather than showing a stale number.
-export function buildReduceSummaryNotification(params: {
-  habitId: string;
-  day: number;
-  cycleDays: number;
-  target: number;
-  todayAmount: number | null;
-  unit: string | null;
-}): BuiltNotification {
-  const { habitId, day, cycleDays, target, todayAmount, unit } = params;
-  const inCycle = day <= cycleDays;
-  const body = inCycle
-    ? `Today's target: ${target} ${unit ?? ""}.${todayAmount === null ? "" : ` You've logged ${todayAmount} so far.`}`
-    : `You've reached your zero target.${todayAmount === null ? "" : ` You've logged ${todayAmount} today.`}`;
-  return {
-    content: { title: inCycle ? `Day ${day} of ${cycleDays}` : "Reduction complete", body, data: { habitId } },
-  };
-}
-
 // Sent through the deterrent channel because that is what the real low-stock
 // alert uses (scheduleImmediateNotification).
 export function buildLowStockNotification(habitId: string, name: string, remaining: number): BuiltNotification {
@@ -269,23 +241,6 @@ export function buildHabitTestNotifications(habit: Habit, todayAmount: number): 
         ? { label: "morning walk reminder", built: buildWalkNotification(habit.id) }
         : { label: "daily reminder", built: buildReminderNotification(habit.id, habit.name) }
     );
-  }
-
-  if (habit.hasCost && habit.summaryTime) {
-    out.push({
-      label: "night summary",
-      built:
-        habit.goalType === "reduce"
-          ? buildReduceSummaryNotification({
-              habitId: habit.id,
-              day: reduceCycleDay(habit),
-              cycleDays: habit.reduceDays ?? REDUCE_CYCLE_DAYS,
-              target: reduceDailyTarget(habit),
-              todayAmount,
-              unit: habit.unit,
-            })
-          : buildDailySummaryNotification(habit.id, habit.name),
-    });
   }
 
   if (habit.kind === "quit" && habit.hasCost) {

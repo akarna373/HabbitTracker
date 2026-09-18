@@ -10,9 +10,8 @@ import {
   scheduleDailyNotification,
   scheduleIntervalReminder,
   scheduleMorningWalkReminder,
-  scheduleReduceSummary,
 } from "./notifications";
-import { buildCheckupNotification, buildDailySummaryNotification, buildReminderNotification } from "./notificationContent";
+import { buildCheckupNotification, buildReminderNotification } from "./notificationContent";
 import { cancelMedicationNotifications, scheduleMedicationNotifications } from "./medicationSchedule";
 import { parseDosageFrequency } from "./medicationParse";
 import { getSwipeSettings, saveSwipeSettings, type SwipeSettings } from "./swipeSettings";
@@ -129,32 +128,6 @@ interface StoreState {
   addMicrotasks: (habitId: string, texts: string[]) => Promise<void>;
 }
 
-// Tonight's "reduce" summary embeds how much has been logged so far, so it has
-// to be rebuilt whenever today's count changes (an in-app tap or a notification
-// action). Serialized through one queue because each run cancels the previous
-// notification id - overlapping runs would leave an orphan that fires as a
-// duplicate. Reads the latest state when its turn comes; never throws.
-let reduceSummaryQueue: Promise<void> = Promise.resolve();
-
-function rescheduleReduceSummary(habitId: string): void {
-  reduceSummaryQueue = reduceSummaryQueue
-    .then(async () => {
-      const { habits, logsByHabit } = useStore.getState();
-      const habit = habits.find((h) => h.id === habitId);
-      if (!habit || habit.goalType !== "reduce" || !habit.hasCost || !habit.summaryTime) return;
-      const today = todayISO();
-      const todayAmount = logsByHabit[habitId]?.find((l) => l.date === today)?.amount ?? 0;
-      await cancelNotification(habit.summaryNotificationId);
-      const summaryNotificationId = await scheduleReduceSummary(habit, todayAmount);
-      const db = await getDb();
-      await db.runAsync("UPDATE habits SET summaryNotificationId = ? WHERE id = ?", [summaryNotificationId, habitId]);
-      useStore.setState((s) => ({
-        habits: s.habits.map((h) => (h.id === habitId ? { ...h, summaryNotificationId } : h)),
-      }));
-    })
-    .catch(() => {});
-}
-
 export const useStore = create<StoreState>((set, get) => ({
   ready: false,
   habits: [],
@@ -210,19 +183,14 @@ export const useStore = create<StoreState>((set, get) => ({
       (smokeLocationsByHabit[row.habitId] ??= []).push(row);
     }
 
-    // A "reduce" habit's nightly notification carries a declining target
-    // that changes day to day - a DAILY trigger can't update its own text,
-    // so re-derive and reschedule tonight's one-time notification on every
-    // app open instead (see lib/notifications.ts:scheduleReduceSummary).
-    const today = todayISO();
+    // The per-habit nightly summary notification was removed (a single central
+    // summary replaces it) - cancel any that an earlier version scheduled.
     for (let i = 0; i < habits.length; i++) {
       const habit = habits[i];
-      if (habit.goalType !== "reduce" || !habit.hasCost || !habit.summaryTime) continue;
+      if (!habit.summaryNotificationId) continue;
       await cancelNotification(habit.summaryNotificationId);
-      const todayAmount = logsByHabit[habit.id]?.find((l) => l.date === today)?.amount ?? 0;
-      const summaryNotificationId = await scheduleReduceSummary(habit, todayAmount);
-      await db.runAsync("UPDATE habits SET summaryNotificationId = ? WHERE id = ?", [summaryNotificationId, habit.id]);
-      habits[i] = { ...habit, summaryNotificationId };
+      await db.runAsync("UPDATE habits SET summaryNotificationId = NULL WHERE id = ?", [habit.id]);
+      habits[i] = { ...habit, summaryNotificationId: null };
     }
 
     set({ ready: true, habits, archivedHabits, microtasksByHabit, logsByHabit, smokeLocationsByHabit, swipeSettings, calendarType });
@@ -270,29 +238,8 @@ export const useStore = create<StoreState>((set, get) => ({
       }
     }
 
-    let summaryNotificationId: string | null = null;
-    if (draft.hasCost && draft.summaryTime) {
-      if (draft.goalType === "reduce") {
-        // Day 1 of the reduce cycle always starts at the full baseline
-        // (day(N-1)/(N-1) = baseline) - a one-time notification, since a
-        // DAILY trigger can't carry a target that changes as the cycle
-        // progresses (see scheduleReduceSummary in lib/notifications.ts).
-        summaryNotificationId = await scheduleReduceSummary(
-          {
-            id,
-            createdAt: now,
-            baselineQuantity: draft.baselineQuantity,
-            reduceDays: draft.reduceDays,
-            unit: draft.unit,
-            summaryTime: draft.summaryTime,
-          },
-          0
-        );
-      } else {
-        const { title, body, data } = buildDailySummaryNotification(id, draft.name).content;
-        summaryNotificationId = await scheduleDailyNotification(title, body, draft.summaryTime, { data });
-      }
-    }
+    // No per-habit summary notification any more (see init).
+    const summaryNotificationId: string | null = null;
 
     await db.runAsync(
       `INSERT INTO habits (
@@ -487,7 +434,6 @@ export const useStore = create<StoreState>((set, get) => ({
       habits: habitRow && !habitRow.archivedAt ? s.habits.map((h) => (h.id === habitId ? rowToHabit(habitRow) : h)) : s.habits,
       logsByHabit: { ...s.logsByHabit, [habitId]: logRows.map(rowToLog) },
     }));
-    rescheduleReduceSummary(habitId);
   },
 
   incrementAmount: async (habitId, date, delta) => {
@@ -513,8 +459,6 @@ export const useStore = create<StoreState>((set, get) => ({
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
-
-    if (date === todayISO()) rescheduleReduceSummary(habitId);
 
     // Logging a cigarette (never undoing one) on a location-tracked habit
     // silently records where the user is - runs in the background so it
@@ -647,29 +591,9 @@ export const useStore = create<StoreState>((set, get) => ({
     const db = await getDb();
     const habit = get().habits.find((h) => h.id === habitId);
     if (!habit) return;
-    const updatedHabit: Habit = { ...habit, goalType, reduceDays };
-
-    await cancelNotification(habit.summaryNotificationId);
-    let summaryNotificationId: string | null = null;
-    if (updatedHabit.hasCost && updatedHabit.summaryTime) {
-      if (goalType === "reduce") {
-        const today = todayISO();
-        const todayAmount = get().logsByHabit[habitId]?.find((l) => l.date === today)?.amount ?? 0;
-        summaryNotificationId = await scheduleReduceSummary(updatedHabit, todayAmount);
-      } else {
-        const { title, body, data } = buildDailySummaryNotification(habitId, updatedHabit.name).content;
-        summaryNotificationId = await scheduleDailyNotification(title, body, updatedHabit.summaryTime, { data });
-      }
-    }
-
-    await db.runAsync("UPDATE habits SET goalType = ?, reduceDays = ?, summaryNotificationId = ? WHERE id = ?", [
-      goalType,
-      reduceDays,
-      summaryNotificationId,
-      habitId,
-    ]);
+    await db.runAsync("UPDATE habits SET goalType = ?, reduceDays = ? WHERE id = ?", [goalType, reduceDays, habitId]);
     set((s) => ({
-      habits: s.habits.map((h) => (h.id === habitId ? { ...h, goalType, reduceDays, summaryNotificationId } : h)),
+      habits: s.habits.map((h) => (h.id === habitId ? { ...h, goalType, reduceDays } : h)),
     }));
   },
 
