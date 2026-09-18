@@ -17,6 +17,12 @@ export const WALK_ACTION_ID = "log-walk";
 export const DOSE_CATEGORY_ID = "medication-dose-check";
 export const DOSE_ACTION_ID = "took-dose";
 export const DOSE_DISMISS_ACTION_ID = "dismiss-dose";
+export const DOSE_MISSED_ACTION_ID = "missed-dose";
+
+// The follow-up sent after "I missed it" on a dose reminder.
+export const DOSE_MISSED_CATEGORY_ID = "medication-missed-dose-check";
+export const DOSE_MISSED_YES_ACTION_ID = "took-missed-dose";
+export const DOSE_MISSED_DISMISS_ACTION_ID = "dismiss-missed-dose";
 
 export const HOTSPOT_YES_ACTION_ID = "hotspot-yes";
 export const HOTSPOT_NO_ACTION_ID = "hotspot-no";
@@ -62,7 +68,21 @@ export const DOSE_CATEGORY: NotificationCategorySpec = {
   id: DOSE_CATEGORY_ID,
   actions: [
     { identifier: DOSE_ACTION_ID, buttonTitle: "I took it", opensAppToForeground: false },
+    { identifier: DOSE_MISSED_ACTION_ID, buttonTitle: "I missed it", opensAppToForeground: false },
     { identifier: DOSE_DISMISS_ACTION_ID, buttonTitle: "Dismiss", opensAppToForeground: false, isDestructive: true },
+  ],
+};
+
+export const DOSE_MISSED_CATEGORY: NotificationCategorySpec = {
+  id: DOSE_MISSED_CATEGORY_ID,
+  actions: [
+    { identifier: DOSE_MISSED_YES_ACTION_ID, buttonTitle: "Yes I took it", opensAppToForeground: false },
+    {
+      identifier: DOSE_MISSED_DISMISS_ACTION_ID,
+      buttonTitle: "Dismiss",
+      opensAppToForeground: false,
+      isDestructive: true,
+    },
   ],
 };
 
@@ -133,6 +153,19 @@ export function buildDoseNotification(params: {
       data: { habitId: params.habitId },
     },
     category: DOSE_CATEGORY,
+  };
+}
+
+// Sent after "I missed it" on a dose reminder.
+export function buildMissedDoseFollowUpNotification(habitId: string, name: string): BuiltNotification {
+  return {
+    content: {
+      title: "Missed dose",
+      body: `Did you take the missed ${name}?`,
+      categoryIdentifier: DOSE_MISSED_CATEGORY_ID,
+      data: { habitId },
+    },
+    category: DOSE_MISSED_CATEGORY,
   };
 }
 

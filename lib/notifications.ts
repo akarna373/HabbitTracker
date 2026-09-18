@@ -11,6 +11,7 @@ import {
   buildHabitTestNotifications,
   buildHotspotNotification,
   buildLowStockNotification,
+  buildMissedDoseFollowUpNotification,
   buildReduceSummaryNotification,
   buildWalkNotification,
   DETERRENT_CHANNEL_ID,
@@ -18,6 +19,10 @@ import {
   DOSE_CATEGORY,
   DOSE_CATEGORY_ID,
   DOSE_DISMISS_ACTION_ID,
+  DOSE_MISSED_ACTION_ID,
+  DOSE_MISSED_CATEGORY,
+  DOSE_MISSED_DISMISS_ACTION_ID,
+  DOSE_MISSED_YES_ACTION_ID,
   HOTSPOT_DISMISS_ACTION_ID,
   HOTSPOT_NO_ACTION_ID,
   HOTSPOT_YES_ACTION_ID,
@@ -332,10 +337,12 @@ async function refreshStoreForHabit(habitId: string): Promise<void> {
 }
 
 const NOTIFICATION_ACTION_TASK = "notification-action-task";
-const DISMISS_ACTION_IDS = new Set([HOTSPOT_DISMISS_ACTION_ID, DOSE_DISMISS_ACTION_ID]);
+const DISMISS_ACTION_IDS = new Set([HOTSPOT_DISMISS_ACTION_ID, DOSE_DISMISS_ACTION_ID, DOSE_MISSED_DISMISS_ACTION_ID]);
 const OWN_ACTION_IDS = new Set([
   WALK_ACTION_ID,
   DOSE_ACTION_ID,
+  DOSE_MISSED_ACTION_ID,
+  DOSE_MISSED_YES_ACTION_ID,
   HOTSPOT_YES_ACTION_ID,
   HOTSPOT_NO_ACTION_ID,
   ...DISMISS_ACTION_IDS,
@@ -398,8 +405,13 @@ async function handleNotificationAction(response: NotificationResponse): Promise
   if (typeof habitId !== "string") return;
   if (actionIdentifier === WALK_ACTION_ID) {
     await markCheckedInToday(habitId);
-  } else if (actionIdentifier === DOSE_ACTION_ID) {
+  } else if (actionIdentifier === DOSE_ACTION_ID || actionIdentifier === DOSE_MISSED_YES_ACTION_ID) {
     await markDoseTaken(habitId);
+  } else if (actionIdentifier === DOSE_MISSED_ACTION_ID) {
+    // Nothing is logged - the dose is still untaken. The reminder was already
+    // dismissed above; ask again a little later.
+    await scheduleMissedDoseFollowUp(habitId, data?.isTest === true);
+    return;
   } else if (actionIdentifier === HOTSPOT_YES_ACTION_ID) {
     // "I smoked/drank/chewed" - one more logged today, same math as tapping
     // the in-app Counter's + button.
@@ -410,6 +422,28 @@ async function handleNotificationAction(response: NotificationResponse): Promise
     return;
   }
   await refreshStoreForHabit(habitId);
+}
+
+// How long after "I missed it" the "did you take it?" follow-up arrives. A
+// notification made by the developer Test button (data.isTest) uses a short
+// delay instead so the whole flow can be tried without waiting.
+const MISSED_DOSE_FOLLOW_UP_MS = 15 * 60 * 1000;
+const MISSED_DOSE_FOLLOW_UP_TEST_MS = 10 * 1000;
+
+// One pending follow-up per habit: a fixed identifier means missing another
+// dose replaces the earlier follow-up instead of stacking a second one.
+async function scheduleMissedDoseFollowUp(habitId: string, isTest: boolean): Promise<void> {
+  if (!Notifications) return;
+  const db = await getDb();
+  const habit = await db.getFirstAsync<{ name: string }>("SELECT name FROM habits WHERE id = ?", [habitId]);
+  if (!habit) return;
+  const { content } = buildMissedDoseFollowUpNotification(habitId, habit.name);
+  const delay = isTest ? MISSED_DOSE_FOLLOW_UP_TEST_MS : MISSED_DOSE_FOLLOW_UP_MS;
+  await Notifications.scheduleNotificationAsync({
+    identifier: `missed-dose-${habitId}`,
+    content: isTest ? { ...content, data: { ...content.data, isTest: true } } : content,
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(Date.now() + delay) },
+  });
 }
 
 // Posting with the alert's own identifier replaces it in the shade (Android keys
@@ -429,6 +463,7 @@ if (Notifications) {
   // on demand right before scheduling (scheduleHotspotDeterrentNotification).
   registerCategory(WALK_CATEGORY).catch(() => {});
   registerCategory(DOSE_CATEGORY).catch(() => {});
+  registerCategory(DOSE_MISSED_CATEGORY).catch(() => {});
 
   if (isNotificationTestEnabled()) {
     Notifications.addNotificationReceivedListener((notification) => {
