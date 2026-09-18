@@ -1,4 +1,5 @@
-import { cancelNotification, DOSE_CATEGORY_ID, scheduleDailyNotification, scheduleOneTimeNotification } from "./notifications";
+import { cancelNotification, scheduleDailyNotification, scheduleOneTimeNotification } from "./notifications";
+import { buildDoseNotification } from "./notificationContent";
 import { parseDosageFrequency, parseDurationDays } from "./medicationParse";
 import { addDays, todayISO } from "./dates";
 
@@ -140,9 +141,18 @@ export interface MedicationScheduleParams {
 
 export async function scheduleMedicationNotifications(params: MedicationScheduleParams): Promise<string[]> {
   const timesPerDay = parseDosageFrequency(params.dosageFrequency);
-  const doseLabel = `${params.doseAmount ?? ""} ${params.doseUnit ?? ""}`.trim();
-  const title = `Take ${params.name}`;
   const ids: string[] = [];
+  const buildDose = (doseOfDay: number, dayNumber?: number, durationDays?: number) =>
+    buildDoseNotification({
+      habitId: params.habitId,
+      name: params.name,
+      doseAmount: params.doseAmount,
+      doseUnit: params.doseUnit,
+      doseOfDay,
+      timesPerDay,
+      dayNumber,
+      durationDays,
+    }).content;
 
   const occurrences = computeDoseOccurrences(params);
 
@@ -154,11 +164,8 @@ export async function scheduleMedicationNotifications(params: MedicationSchedule
     const gapHours = defaultGapHours(timesPerDay);
     for (let i = 0; i < timesPerDay; i++) {
       const time = minutesToTimeString(startMinutes + i * gapHours * 60);
-      const body = `${doseLabel} - dose ${i + 1} of ${timesPerDay}`;
-      const id = await scheduleDailyNotification(title, body, time, {
-        categoryIdentifier: DOSE_CATEGORY_ID,
-        data: { habitId: params.habitId },
-      });
+      const { title, body, categoryIdentifier, data } = buildDose(i + 1);
+      const id = await scheduleDailyNotification(title, body, time, { categoryIdentifier, data });
       if (id) ids.push(id);
     }
     return ids;
@@ -171,11 +178,8 @@ export async function scheduleMedicationNotifications(params: MedicationSchedule
     const when = combineDateTime(occ.date, occ.time);
     const dayNumber = Math.floor(k / timesPerDay) + 1;
     const doseOfDay = (k % timesPerDay) + 1;
-    const body = `${doseLabel} - dose ${doseOfDay} of ${timesPerDay}, day ${dayNumber} of ${durationDays}`;
-    const id = await scheduleOneTimeNotification(title, body, when, {
-      categoryIdentifier: DOSE_CATEGORY_ID,
-      data: { habitId: params.habitId },
-    });
+    const { title, body, categoryIdentifier, data } = buildDose(doseOfDay, dayNumber, durationDays);
+    const id = await scheduleOneTimeNotification(title, body, when, { categoryIdentifier, data });
     if (id) ids.push(id);
   }
   return ids;

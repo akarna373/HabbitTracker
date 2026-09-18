@@ -1,7 +1,38 @@
+import * as TaskManager from "expo-task-manager";
+import type { NotificationTaskPayload } from "expo-notifications";
 import { getDb } from "./db";
 import { genId } from "./id";
 import { todayISO } from "./dates";
 import { parseDosageFrequency } from "./medicationParse";
+import {
+  buildHabitTestNotifications,
+  buildHotspotNotification,
+  buildLowStockNotification,
+  buildWalkNotification,
+  DETERRENT_CHANNEL_ID,
+  DOSE_ACTION_ID,
+  DOSE_CATEGORY,
+  DOSE_CATEGORY_ID,
+  DOSE_DISMISS_ACTION_ID,
+  HOTSPOT_DISMISS_ACTION_ID,
+  HOTSPOT_NO_ACTION_ID,
+  HOTSPOT_YES_ACTION_ID,
+  WALK_ACTION_ID,
+  WALK_CATEGORY,
+  type NotificationCategorySpec,
+} from "./notificationContent";
+import type { Habit } from "./types";
+
+// Developer-only "Test notification" button gate (see fireTestNotification).
+// EXPO_PUBLIC_ vars are inlined at bundle time, so the literal
+// process.env.EXPO_PUBLIC_... access below must stay un-destructured.
+export function isNotificationTestEnabled(): boolean {
+  return __DEV__ || process.env.EXPO_PUBLIC_ENABLE_NOTIFICATION_TEST === "1";
+}
+
+function testLog(...args: unknown[]): void {
+  if (isNotificationTestEnabled()) console.log("[notif-test]", ...args);
+}
 
 // expo-notifications throws on import inside Expo Go (SDK 53+ removed the module
 // there entirely, not just remote push). Load it defensively so the rest of the
@@ -26,16 +57,29 @@ try {
 // no heads-up popup, no sound, easy to miss entirely in the shade. The
 // location-deterrent alert only works if the user actually notices it, so
 // it gets its own high-importance channel.
-const DETERRENT_CHANNEL_ID = "deterrent";
-if (Notifications) {
+async function ensureDeterrentChannel(): Promise<void> {
+  if (!Notifications) return;
   // "default" isn't a real sound resource name on Android here (it wants an
   // actual registered file, or nothing) - omitting it lets the channel use
   // the system's own default notification sound.
-  Notifications.setNotificationChannelAsync(DETERRENT_CHANNEL_ID, {
+  await Notifications.setNotificationChannelAsync(DETERRENT_CHANNEL_ID, {
     name: "Location deterrent alerts",
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
-  }).catch(() => {});
+  });
+}
+ensureDeterrentChannel().catch(() => {});
+
+async function registerCategory(spec: NotificationCategorySpec): Promise<void> {
+  if (!Notifications) return;
+  await Notifications.setNotificationCategoryAsync(
+    spec.id,
+    spec.actions.map((a) => ({
+      identifier: a.identifier,
+      buttonTitle: a.buttonTitle,
+      options: { opensAppToForeground: a.opensAppToForeground, ...(a.isDestructive ? { isDestructive: true } : {}) },
+    }))
+  );
 }
 
 export async function ensureNotificationPermission(): Promise<boolean> {
@@ -173,97 +217,115 @@ async function incrementHabitAmountToday(habitId: string, delta: number): Promis
 }
 
 // The hotspot deterrent alert, with inline "I {verb}" / "I didn't" /
-// "Dismiss" actions - registers this habit's own category on demand (button
-// labels need the habit's own verb - "I smoked"/"I drank"/"I chewed"/
-// whatever a custom quit habit calls it - so one shared category with fixed
-// text, like WALK_CATEGORY_ID/DOSE_CATEGORY_ID above, won't work here).
+// "Dismiss" actions - registers this habit's own category on demand (see
+// hotspotCategory in lib/notificationContent.ts for why it is per-habit).
 export async function scheduleHotspotDeterrentNotification(
   habitId: string,
-  title: string,
-  body: string,
-  verb: string
+  templateId: string | null | undefined
 ): Promise<void> {
   if (!Notifications) return;
   const granted = await ensureNotificationPermission();
   if (!granted) return;
-  const categoryId = `hotspot-${habitId}`;
-  await Notifications.setNotificationCategoryAsync(categoryId, [
-    // opensAppToForeground: true - the app has no background task for
-    // notification responses, so if the process was killed since the
-    // notification fired (the common case), a false here means the JS
-    // listener below never runs at all. true guarantees it does.
-    { identifier: HOTSPOT_YES_ACTION_ID, buttonTitle: `I ${verb}`, options: { opensAppToForeground: true } },
-    { identifier: HOTSPOT_NO_ACTION_ID, buttonTitle: "I didn't", options: { opensAppToForeground: true } },
-    {
-      identifier: HOTSPOT_DISMISS_ACTION_ID,
-      buttonTitle: "Dismiss",
-      options: { opensAppToForeground: false, isDestructive: true },
-    },
-  ]);
+  const built = buildHotspotNotification(habitId, templateId);
+  if (built.category) await registerCategory(built.category);
   await Notifications.scheduleNotificationAsync({
-    content: { title, body, categoryIdentifier: categoryId, data: { habitId } },
+    content: built.content,
     trigger: { channelId: DETERRENT_CHANNEL_ID },
   });
 }
 
-// The morning-walk check-in: a daily reminder with an inline "I went for a
-// walk" action, so the user can log it without opening the app - matches
-// how the OS presents notification action buttons (tapping one dismisses
-// the notification without launching the app to the foreground).
-const WALK_CATEGORY_ID = "morning-walk-check";
-const WALK_ACTION_ID = "log-walk";
+// The actions above write straight to the DB (no React tree may be mounted),
+// so the zustand store has to be told to re-read that habit afterwards -
+// otherwise an already-open app shows the old count, and the next in-app tap
+// on "+" would compute from it and overwrite the notification's log. Loaded
+// lazily because lib/store.ts imports this file. If the store is still
+// starting up (app cold-launched by the tap), wait for it: init() may have
+// read the DB before the write landed.
+async function refreshStoreForHabit(habitId: string): Promise<void> {
+  const { useStore } = require("./store") as typeof import("./store");
+  if (!useStore.getState().ready) {
+    await new Promise<void>((resolve) => {
+      const unsubscribe = useStore.subscribe((state) => {
+        if (state.ready) {
+          unsubscribe();
+          resolve();
+        }
+      });
+    });
+  }
+  await useStore.getState().refreshHabit(habitId);
+}
 
-// A dose reminder's inline "I took it" action - same reasoning as the walk
-// check-in above (log without opening the app).
-const DOSE_CATEGORY_ID = "medication-dose-check";
-const DOSE_ACTION_ID = "took-dose";
-// No handler branch needed for this one - the response listener below only
-// acts on identifiers it recognizes, so Dismiss just closes the
-// notification without touching the dose count or stock.
-const DOSE_DISMISS_ACTION_ID = "dismiss-dose";
-
-// The hotspot deterrent's three actions - shared identifiers across every
-// substance (smoking/drinking/chewing/a custom quit habit), since only the
-// button *label* differs per habit (its own verb) - the category is
-// registered per-habit, on demand, right before scheduling (see
-// scheduleHotspotDeterrentNotification below), not once at module load like
-// the two fixed categories above.
-const HOTSPOT_YES_ACTION_ID = "hotspot-yes";
-const HOTSPOT_NO_ACTION_ID = "hotspot-no";
-const HOTSPOT_DISMISS_ACTION_ID = "hotspot-dismiss";
+const NOTIFICATION_ACTION_TASK = "notification-action-task";
+const DISMISS_ACTION_IDS = new Set([HOTSPOT_DISMISS_ACTION_ID, DOSE_DISMISS_ACTION_ID]);
+const OWN_ACTION_IDS = new Set([
+  WALK_ACTION_ID,
+  DOSE_ACTION_ID,
+  HOTSPOT_YES_ACTION_ID,
+  HOTSPOT_NO_ACTION_ID,
+  ...DISMISS_ACTION_IDS,
+]);
 
 if (Notifications) {
-  Notifications.setNotificationCategoryAsync(WALK_CATEGORY_ID, [
-    // Same opensAppToForeground: true reasoning as the hotspot actions above.
-    { identifier: WALK_ACTION_ID, buttonTitle: "I went for a walk", options: { opensAppToForeground: true } },
-  ]).catch(() => {});
+  // The morning-walk check-in and dose reminder categories are fixed, so
+  // they register once here. The hotspot category is per-habit and registers
+  // on demand right before scheduling (scheduleHotspotDeterrentNotification).
+  registerCategory(WALK_CATEGORY).catch(() => {});
+  registerCategory(DOSE_CATEGORY).catch(() => {});
 
-  Notifications.setNotificationCategoryAsync(DOSE_CATEGORY_ID, [
-    { identifier: DOSE_ACTION_ID, buttonTitle: "I took it", options: { opensAppToForeground: true } },
-    {
-      identifier: DOSE_DISMISS_ACTION_ID,
-      buttonTitle: "Dismiss",
-      options: { opensAppToForeground: false, isDestructive: true },
-    },
-  ]).catch(() => {});
+  if (isNotificationTestEnabled()) {
+    Notifications.addNotificationReceivedListener((notification) => {
+      const { identifier, content } = notification.request;
+      testLog("received in foreground", { identifier, title: content.title, data: content.data });
+    });
+  }
+
+  // Android never removes a notification when one of its action buttons is
+  // tapped (neither the OS nor expo-notifications does it) - without this
+  // every button would leave the alert sitting in the shade, and "Dismiss"
+  // would do nothing at all.
+  //
+  // With the app backgrounded or killed, a "Dismiss" tap (opensAppToForeground
+  // false) never reaches the JS listener below; expo-notifications only runs a
+  // registered background task for it. So that task handles ONLY the dismiss
+  // actions - the log-something actions open the app and are handled once by
+  // the listener, and letting the task handle them too would double-count.
+  TaskManager.defineTask<NotificationTaskPayload>(NOTIFICATION_ACTION_TASK, async ({ data }) => {
+    if (!data || !("actionIdentifier" in data)) return;
+    testLog("background task action", data.actionIdentifier);
+    if (DISMISS_ACTION_IDS.has(data.actionIdentifier)) {
+      await Notifications?.dismissNotificationAsync(data.notification.request.identifier);
+    }
+  });
+  Notifications.registerTaskAsync(NOTIFICATION_ACTION_TASK).catch(() => {});
 
   Notifications.addNotificationResponseReceivedListener((response) => {
+    testLog("action pressed", {
+      identifier: response.notification.request.identifier,
+      actionIdentifier: response.actionIdentifier,
+      data: response.notification.request.content.data,
+    });
+    if (OWN_ACTION_IDS.has(response.actionIdentifier)) {
+      Notifications?.dismissNotificationAsync(response.notification.request.identifier).catch(() => {});
+    }
     const habitId = response.notification.request.content.data?.habitId;
     if (typeof habitId !== "string") return;
+    let write: Promise<void> | null = null;
     if (response.actionIdentifier === WALK_ACTION_ID) {
-      markCheckedInToday(habitId).catch(() => {});
+      write = markCheckedInToday(habitId);
     } else if (response.actionIdentifier === DOSE_ACTION_ID) {
-      markDoseTaken(habitId).catch(() => {});
+      write = markDoseTaken(habitId);
     } else if (response.actionIdentifier === HOTSPOT_YES_ACTION_ID) {
       // "I smoked/drank/chewed" - one more logged today, same math as
       // tapping the in-app Counter's + button.
-      incrementHabitAmountToday(habitId, 1).catch(() => {});
+      write = incrementHabitAmountToday(habitId, 1);
     } else if (response.actionIdentifier === HOTSPOT_NO_ACTION_ID) {
       // "I didn't" - same as the "I stayed {x}-free today" button: ensures
       // today has a logged (clean) day for streak/goal purposes, without
       // adding to the count.
-      incrementHabitAmountToday(habitId, 0).catch(() => {});
+      write = incrementHabitAmountToday(habitId, 0);
     }
+    write?.then(() => refreshStoreForHabit(habitId)).catch(() => {});
   });
 }
 
@@ -318,7 +380,8 @@ export async function adjustStock(habitId: string, amountDelta: number): Promise
     const timesPerDay = parseDosageFrequency(habit.dosageFrequency);
     if (nextStock <= timesPerDay * LOW_STOCK_DAYS && habit.lowStockNotifiedAt !== today) {
       await db.runAsync("UPDATE habits SET lowStockNotifiedAt = ? WHERE id = ?", [today, habitId]);
-      await scheduleImmediateNotification(`Running low on ${habit.name}`, `Only ${nextStock} left - time to restock.`);
+      const { content } = buildLowStockNotification(habit.name, nextStock);
+      await scheduleImmediateNotification(content.title, content.body);
     }
   }
 
@@ -347,16 +410,54 @@ export async function scheduleMorningWalkReminder(habitId: string, time: string)
   if (!granted) return null;
   const { hour, minute } = parseTime(time);
   return Notifications.scheduleNotificationAsync({
-    content: {
-      title: "Did you go for a morning walk?",
-      body: "Even a 30 minute walk can improve your heart. Trust me.",
-      categoryIdentifier: WALK_CATEGORY_ID,
-      data: { habitId },
-    },
+    content: buildWalkNotification(habitId).content,
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour,
       minute,
     },
   });
+}
+
+export type TestNotificationResult =
+  | { status: "scheduled"; labels: string[]; delaySeconds: number }
+  | { status: "unavailable" | "denied" | "nothing-to-test" };
+
+// Developer-only: schedules a one-off copy of each notification this habit
+// really produces (same content, category, channel and data as the real
+// schedulers - see buildHabitTestNotifications), `delaySeconds` from now and
+// 5s apart when there are several. Unique identifiers, never touches a real
+// scheduled notification. Tests deliberately get no special handling in the
+// response listener above - they must exercise the real action code path.
+export async function fireTestNotification(
+  habit: Habit,
+  todayAmount: number,
+  delaySeconds = 5
+): Promise<TestNotificationResult> {
+  if (!Notifications) return { status: "unavailable" };
+  const granted = await ensureNotificationPermission();
+  if (!granted) return { status: "denied" };
+
+  const tests = buildHabitTestNotifications(habit, todayAmount);
+  if (tests.length === 0) return { status: "nothing-to-test" };
+
+  await ensureDeterrentChannel();
+  const stamp = Date.now();
+  for (let i = 0; i < tests.length; i++) {
+    const { label, built } = tests[i];
+    if (built.category) await registerCategory(built.category);
+    const fireAt = new Date(stamp + (delaySeconds + i * 5) * 1000);
+    const identifier = `test-${habit.id}-${i}-${stamp}`;
+    await Notifications.scheduleNotificationAsync({
+      identifier,
+      content: { ...built.content, data: { ...built.content.data, isTest: true } },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: fireAt,
+        ...(built.channelId ? { channelId: built.channelId } : {}),
+      },
+    });
+    testLog("test scheduled", { identifier, label, fireAt: fireAt.toISOString() });
+  }
+  return { status: "scheduled", labels: tests.map((t) => t.label), delaySeconds };
 }

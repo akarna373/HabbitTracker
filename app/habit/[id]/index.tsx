@@ -8,6 +8,7 @@ import { Counter } from "../../../components/Counter";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { ProgressBar } from "../../../components/ProgressBar";
 import { ScreenHeader } from "../../../components/ScreenHeader";
+import { TestNotificationButton } from "../../../components/TestNotificationButton";
 import { ThemedSwitch } from "../../../components/ThemedSwitch";
 import { formatMoney } from "../../../lib/currency";
 import { todayISO } from "../../../lib/dates";
@@ -115,13 +116,7 @@ export default function HabitDetailScreen() {
         // only if they happen to have this screen open already. The inline
         // "I {verb}" / "I didn't" actions log the moment directly, so
         // logging doesn't require opening the app at all.
-        const { locationNoun, verb } = getQuitCopy(habit.templateId);
-        scheduleHotspotDeterrentNotification(
-          habit.id,
-          `You're at your ${locationNoun} location`,
-          "Please move away from this spot - it's better for your health and your finances.",
-          verb
-        );
+        scheduleHotspotDeterrentNotification(habit.id, habit.templateId);
       }
     })();
     return () => {
@@ -297,6 +292,7 @@ export default function HabitDetailScreen() {
             onPress={() => router.push(`/habit/${habit.id}/summary`)}
             style={amount === 0 ? undefined : styles.statusButton}
           />
+          <TestNotificationButton habit={habit} todayAmount={amount} />
           <PrimaryButton title="Delete habit" variant="outline" onPress={confirmDelete} style={styles.deleteButton} />
         </ScrollView>
       </SafeAreaView>
@@ -481,6 +477,7 @@ export default function HabitDetailScreen() {
             <PrimaryButton title="Save reflection" variant="outline" onPress={() => saveReflection(habit.id, today, reflection)} />
           </>
         ) : null}
+        <TestNotificationButton habit={habit} todayAmount={amount} />
         <PrimaryButton title="Delete habit" variant="outline" onPress={confirmDelete} style={styles.deleteButton} />
       </ScrollView>
 
