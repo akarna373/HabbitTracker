@@ -3,7 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { HabitsTile } from "../../components/HabitsTile";
 import { HeaderMenu } from "../../components/HeaderMenu";
 import { ProfileBadge } from "../../components/ProfileBadge";
-import { SpeedDialFab } from "../../components/SpeedDialFab";
+import { FAB_CLEARANCE, SpeedDialFab } from "../../components/SpeedDialFab";
 import { SummaryDashboardCard } from "../../components/SummaryDashboardCard";
 import { UpcomingTasksTile } from "../../components/UpcomingTasksTile";
 import { formatLongDateForCalendar } from "../../lib/calendarSettings";
@@ -62,5 +62,6 @@ const styles = StyleSheet.create({
   title: { ...typography.title, fontSize: 20 },
   date: { ...typography.caption, marginBottom: spacing.sm },
   // Both tiles live here, 10 dp apart.
-  tiles: { flex: 1, gap: 10, paddingBottom: spacing.sm },
+  // The bottom padding keeps the tiles clear of the floating + button.
+  tiles: { flex: 1, gap: 10, paddingBottom: FAB_CLEARANCE },
 });

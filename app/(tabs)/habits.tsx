@@ -3,7 +3,7 @@ import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../components/Card";
 import { ListRow } from "../../components/ListRow";
-import { SpeedDialFab } from "../../components/SpeedDialFab";
+import { FAB_CLEARANCE, SpeedDialFab } from "../../components/SpeedDialFab";
 import { useStore } from "../../lib/store";
 import { colors, spacing, typography } from "../../lib/theme";
 
@@ -61,7 +61,7 @@ function frequencyLabel(freq: string): string {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  listContent: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
+  listContent: { paddingHorizontal: spacing.lg, paddingBottom: FAB_CLEARANCE },
   title: { ...typography.title, marginTop: spacing.md },
   subtitle: { ...typography.caption, marginBottom: spacing.md },
   totalRow: { flexDirection: "row", justifyContent: "space-between" },
