@@ -4,14 +4,14 @@ import { HabitsTile } from "../../components/HabitsTile";
 import { HeaderMenu } from "../../components/HeaderMenu";
 import { ProfileBadge } from "../../components/ProfileBadge";
 import { FAB_CLEARANCE, SpeedDialFab } from "../../components/SpeedDialFab";
-import { SummaryDashboardCard } from "../../components/SummaryDashboardCard";
+import { TodayCarousel } from "../../components/TodayCarousel";
 import { UpcomingTasksTile } from "../../components/UpcomingTasksTile";
 import { formatLongDateForCalendar } from "../../lib/calendarSettings";
 import { useStore } from "../../lib/store";
 import { useMinuteClock } from "../../lib/useMinuteClock";
 import { brandFont, colors, spacing, typography } from "../../lib/theme";
 
-// Today is a fixed screen - it never scrolls. The summary card and the two compact
+// Today is a fixed screen - it never scrolls. The swipeable card area and the two compact
 // tiles below it (Habits, Upcoming Tasks) each take their natural height; each tile
 // opens its own screen. The + button floats at the bottom-right corner.
 export default function TodayScreen() {
@@ -34,7 +34,7 @@ export default function TodayScreen() {
         <Text style={styles.title}>A little better, daily.</Text>
         <Text style={styles.date}>{formatLongDateForCalendar(today, calendarType)}</Text>
 
-        <SummaryDashboardCard />
+        <TodayCarousel />
 
         <View style={styles.tiles}>
           <HabitsTile />

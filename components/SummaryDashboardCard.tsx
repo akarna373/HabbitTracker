@@ -183,9 +183,10 @@ export function SummaryDashboardCard() {
 const styles = StyleSheet.create({
   frame: {
     width: "100%",
+    // Grows to the height of the tallest card in Today's swiper.
+    flexGrow: 1,
     borderRadius: SUMMARY_CARD_RADIUS,
     overflow: "hidden",
-    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: "rgba(255,79,139,0.45)",
     backgroundColor: "#141026",

@@ -38,7 +38,7 @@ import {
 import { selectLogForDate, useStore } from "../../../lib/store";
 import { colors, radii, spacing, typography } from "../../../lib/theme";
 import { DUAL_METRIC_LABELS, DUAL_METRIC_TEMPLATE_IDS, getQuitCopy } from "../../../lib/templates";
-import type { Microtask } from "../../../lib/types";
+import type { Habit, Microtask } from "../../../lib/types";
 
 // A literal [] fallback in the selector below would be a new array every
 // render, which breaks zustand's snapshot caching and spams a "getSnapshot
@@ -301,7 +301,7 @@ export default function HabitDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScreenHeader title={habit.name} subtitle={habit.kind === "good" ? "Build a good habit" : "Quit a habit"} />
+      <ScreenHeader title={habit.name} subtitle={habitKindLabel(habit)} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.tag}>
           <Text style={styles.tagText}>{isExam ? `${daysUntilExam(habit)} DAYS UNTIL YOUR EXAM` : `DAY ${streak} STREAK`}</Text>
@@ -533,6 +533,14 @@ export default function HabitDetailScreen() {
       </Modal>
     </SafeAreaView>
   );
+}
+
+// The line under the title. Health habits (medication, checkups) sit under the Health
+// category, so they read "Track your health", not "Build a good habit".
+function habitKindLabel(habit: Habit): string {
+  if (habit.kind === "quit") return "Quit a habit";
+  const isHealth = habit.category === "health" || habit.templateId === "medication" || habit.templateId === "doctor_checkup";
+  return isHealth ? "Track your health" : "Build a good habit";
 }
 
 const styles = StyleSheet.create({

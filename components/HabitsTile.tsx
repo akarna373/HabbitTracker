@@ -9,7 +9,7 @@ import { colors, typography } from "../lib/theme";
 import { DashboardTile } from "./DashboardTile";
 
 // One compact tile standing in for the old list of habit tiles on Today: title and
-// how many are done. The whole tile is the button; it opens the Habits tab.
+// how many are done. The whole tile is the button; it opens today's habits (app/todays-habits.tsx).
 export function HabitsTile() {
   const habits = useStore((s) => s.habits);
   const logsByHabit = useStore((s) => s.logsByHabit);
@@ -24,7 +24,7 @@ export function HabitsTile() {
       : `Habits. ${done} of ${total} done today. Opens your habits.`;
 
   return (
-    <DashboardTile watermark="checkmark-done" onPress={() => router.navigate("/habits")} accessibilityLabel={label}>
+    <DashboardTile watermark="checkmark-done" onPress={() => router.push("/todays-habits")} accessibilityLabel={label}>
       <View style={styles.titleRow}>
         <Ionicons name="checkmark-done-circle-outline" size={20} color={colors.accentPink} />
         <Text style={styles.title}>Habits</Text>

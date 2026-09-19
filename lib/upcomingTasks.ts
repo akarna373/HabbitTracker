@@ -52,19 +52,28 @@ function statusFor(time: string, nowMinutes: number): "upcoming" | "earlier" {
   return minutesOf(time) < nowMinutes ? "earlier" : "upcoming";
 }
 
-function doseTasks(habit: Habit, logs: readonly DailyLog[] | undefined, today: string, nowMinutes: number): UpcomingTask[] {
-  const startTime = habit.reminderTime && TIME_PATTERN.test(habit.reminderTime) ? habit.reminderTime : "08:00";
-  const startDate = habit.medicationStartDate ?? createdLocalDate(habit.createdAt) ?? today;
-  if (!isISODate(startDate) || today < startDate) return [];
+function medicationStartTime(habit: Habit): string {
+  return habit.reminderTime && TIME_PATTERN.test(habit.reminderTime) ? habit.reminderTime : "08:00";
+}
 
-  // Inside a fixed-length course only its own days count; an ongoing one runs on.
+// Whether a medication's course covers `date`: it has started, and - inside a
+// fixed-length course - the date is one of its own days (an ongoing one runs on).
+// Also used by the Today reflection cards.
+export function isMedicationCourseActive(habit: Habit, date: string): boolean {
+  const startDate = habit.medicationStartDate ?? createdLocalDate(habit.createdAt) ?? date;
+  if (!isISODate(startDate) || date < startDate) return false;
   const course = computeDoseOccurrences({
     dosageFrequency: habit.dosageFrequency,
     durationType: habit.durationType,
-    startTime,
+    startTime: medicationStartTime(habit),
     startDate,
   });
-  if (course !== null && !course.some((occurrence) => occurrence.date === today)) return [];
+  return course === null || course.some((occurrence) => occurrence.date === date);
+}
+
+function doseTasks(habit: Habit, logs: readonly DailyLog[] | undefined, today: string, nowMinutes: number): UpcomingTask[] {
+  if (!isMedicationCourseActive(habit, today)) return [];
+  const startTime = medicationStartTime(habit);
 
   const times = getTodayDoseTimes({ dosageFrequency: habit.dosageFrequency, durationType: habit.durationType, startTime });
   const timesPerDay = parseDosageFrequency(habit.dosageFrequency);
