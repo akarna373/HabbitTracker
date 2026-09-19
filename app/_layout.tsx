@@ -1,13 +1,14 @@
 import { Baloo2_800ExtraBold, useFonts } from "@expo-google-fonts/baloo-2";
 import { router, Stack } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { AppState, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { colors } from "../lib/theme";
 import { useStore } from "../lib/store";
+import { useMinuteClock } from "../lib/useMinuteClock";
 import { hasSeenOnboarding } from "../lib/onboarding";
 import { subscribeToNotificationOpens } from "../lib/notifications";
 import { ConfirmDialogHost } from "../components/ConfirmDialog";
@@ -22,6 +23,27 @@ import "../lib/geofencing";
 // Taking explicit control instead: hold it here, hide it ourselves once
 // every startup gate below has actually passed.
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Keeps the daily savings ledger current without an app restart: when the local date
+// changes it finalizes the day that just ended, and when the app returns to the
+// foreground it re-reads the database first (a notification action may have logged
+// something while the app was in the background) and then syncs.
+function SavingsSync() {
+  const { today } = useMinuteClock();
+
+  useEffect(() => {
+    void useStore.getState().syncSavings();
+  }, [today]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void useStore.getState().resume();
+    });
+    return () => subscription.remove();
+  }, []);
+
+  return null;
+}
 
 export default function RootLayout() {
   const ready = useStore((s) => s.ready);
@@ -81,6 +103,7 @@ export default function RootLayout() {
           <Stack.Screen name="profile-setup" />
           <Stack.Screen name="focus-setup" />
         </Stack>
+        <SavingsSync />
         <ConfirmDialogHost />
         <OptionSheetHost />
       </SafeAreaProvider>

@@ -25,16 +25,16 @@ import { getCourseCalendarView } from "../../../lib/medicationSchedule";
 import {
   attendanceGuidance,
   attendancePercent,
-  baselineCost,
   computeStreak,
   costForAmount,
   daysUntilExam,
   pricePerDose,
   reduceCycleDay,
-  reduceDailyTarget,
   REDUCE_CYCLE_DAYS,
   totalCostThisWeek,
 } from "../../../lib/progress";
+import { baselineLine, quitDaySummary, targetLine } from "../../../lib/quitBaseline";
+import { needsBaseline } from "../../../lib/savingsLedger";
 import { selectLogForDate, useStore } from "../../../lib/store";
 import { colors, radii, spacing, typography } from "../../../lib/theme";
 import { DUAL_METRIC_LABELS, DUAL_METRIC_TEMPLATE_IDS, getQuitCopy } from "../../../lib/templates";
@@ -60,6 +60,7 @@ export default function HabitDetailScreen() {
   const setExactStock = useStore((s) => s.setExactStock);
   const calendarType = useStore((s) => s.calendarType);
   const deleteHabit = useStore((s) => s.deleteHabit);
+  const setBaseline = useStore((s) => s.setBaseline);
   const setLocationTracking = useStore((s) => s.setLocationTracking);
   const setBackgroundLocationTracking = useStore((s) => s.setBackgroundLocationTracking);
   const smokeLocations = useStore((s) => s.smokeLocationsByHabit[id ?? ""]);
@@ -78,6 +79,8 @@ export default function HabitDetailScreen() {
   const [showRestockModal, setShowRestockModal] = useState(false);
   const [restockMode, setRestockMode] = useState<"add" | "set">("add");
   const [restockQty, setRestockQty] = useState("");
+  const [showBaselineModal, setShowBaselineModal] = useState(false);
+  const [baselineInput, setBaselineInput] = useState("");
 
   useEffect(() => {
     setReflection(log?.reflection ?? "");
@@ -202,16 +205,14 @@ export default function HabitDetailScreen() {
   };
 
   if (habit.kind === "quit" && habit.hasCost) {
-    const cost = costForAmount(habit, amount);
-    const isReduce = habit.goalType === "reduce";
     const day = reduceCycleDay(habit);
-    // A "reduce" habit compares against that day's declining target instead
-    // of the flat baseline forever - every other goal type keeps the
-    // original flat-baseline comparison.
-    const compareCost = isReduce ? costForAmount(habit, reduceDailyTarget(habit)) : baselineCost(habit);
-    const diff = compareCost - cost;
-    const compareLabel = isReduce ? "today's target" : "baseline";
     const cycleDays = habit.reduceDays ?? REDUCE_CYCLE_DAYS;
+    // Every comparison is against the ORIGINAL baseline stored when the habit was set
+    // up - never against today's (reduced) target, the price, or what was logged.
+    const baselineMissing = needsBaseline(habit);
+    const daySummary = quitDaySummary(habit, amount, log?.amountLogged === true, formatMoney);
+    const baselineText = baselineLine(habit);
+    const targetText = targetLine(habit, today);
     const goalTag =
       habit.goalType === "reduce"
         ? `DAY ${day} OF ${cycleDays}`
@@ -229,6 +230,30 @@ export default function HabitDetailScreen() {
             <Text style={styles.tagText}>{goalTag}</Text>
           </View>
 
+          {baselineMissing ? (
+            <View style={styles.baselineBlock}>
+              <Text style={styles.baselineText}>Baseline: not set</Text>
+              <Text style={styles.cardCaption}>
+                This habit was created before its starting amount was saved, so savings cannot be counted yet.
+              </Text>
+              <PrimaryButton
+                title="Set baseline"
+                variant="outline"
+                size="small"
+                onPress={() => {
+                  setBaselineInput("");
+                  setShowBaselineModal(true);
+                }}
+                style={styles.baselineButton}
+              />
+            </View>
+          ) : (
+            <View style={styles.baselineBlock}>
+              {baselineText ? <Text style={styles.baselineText}>{baselineText}</Text> : null}
+              {targetText ? <Text style={styles.baselineText}>{targetText}</Text> : null}
+            </View>
+          )}
+
           <Counter
             value={amount}
             unit={`${habit.unit ?? ""} today`}
@@ -239,12 +264,19 @@ export default function HabitDetailScreen() {
 
           <Card highlighted>
             <Text style={styles.cardTitle}>Today's spending</Text>
-            <Text style={styles.cardBody}>
-              {amount} x {formatMoney(habit.pricePerItem ?? 0)} = {formatMoney(cost)}
-            </Text>
-            <Text style={styles.cardCaption}>
-              {diff >= 0 ? `${formatMoney(diff)} less than ${compareLabel}` : `${formatMoney(Math.abs(diff))} more than ${compareLabel}`}
-            </Text>
+            {daySummary ? (
+              <>
+                <SpendingLine label="Consumption today" text={daySummary.consumptionText} />
+                {daySummary.spendingText ? <SpendingLine label="Spending today" text={daySummary.spendingText} /> : null}
+                {daySummary.differenceText ? <SpendingLine label="Against your baseline" text={daySummary.differenceText} /> : null}
+                <SpendingLine label="Saved" text={daySummary.savedText} strong={daySummary.logged} />
+                <Text style={styles.cardCaption}>
+                  {daySummary.logged ? "Counts toward this month once the day ends." : `Log today, or tap "I stayed ${quitCopy.freeLabel} today" below, to count it.`}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.cardCaption}>Set this habit's baseline to see what you save.</Text>
+            )}
           </Card>
 
           <PrimaryButton title="Motivate me" onPress={() => router.push(`/habit/${habit.id}/motivate`)} />
@@ -295,6 +327,37 @@ export default function HabitDetailScreen() {
           <TestNotificationButton habit={habit} todayAmount={amount} />
           <PrimaryButton title="Delete habit" variant="outline" onPress={confirmDelete} style={styles.deleteButton} />
         </ScrollView>
+
+        <Modal visible={showBaselineModal} transparent animationType="fade" onRequestClose={() => setShowBaselineModal(false)}>
+          <View style={styles.restockOverlay}>
+            <View style={styles.restockCard}>
+              <Text style={styles.cardTitle}>{`How many ${habit.unit ?? "units"} a day did you have before you started?`}</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="e.g. 4"
+                placeholderTextColor={colors.textMuted}
+                value={baselineInput}
+                onChangeText={(t) => setBaselineInput(t.replace(/[^0-9.]/g, ""))}
+                autoFocus
+              />
+              <Text style={styles.cardCaption}>This is your starting point. Savings are measured against it.</Text>
+              <View style={styles.restockButtonRow}>
+                <PrimaryButton title="Cancel" variant="outline" style={styles.restockButton} onPress={() => setShowBaselineModal(false)} />
+                <PrimaryButton
+                  title="Save"
+                  style={styles.restockButton}
+                  disabled={!(Number(baselineInput) > 0)}
+                  onPress={() => {
+                    const quantity = Number(baselineInput);
+                    if (quantity > 0) void setBaseline(habit.id, quantity);
+                    setShowBaselineModal(false);
+                  }}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -306,6 +369,13 @@ export default function HabitDetailScreen() {
         <View style={styles.tag}>
           <Text style={styles.tagText}>{isExam ? `${daysUntilExam(habit)} DAYS UNTIL YOUR EXAM` : `DAY ${streak} STREAK`}</Text>
         </View>
+
+        {habit.kind === "quit" && (baselineLine(habit) || targetLine(habit, today)) ? (
+          <View style={styles.baselineBlock}>
+            {baselineLine(habit) ? <Text style={styles.baselineText}>{baselineLine(habit)}</Text> : null}
+            {targetLine(habit, today) ? <Text style={styles.baselineText}>{targetLine(habit, today)}</Text> : null}
+          </View>
+        ) : null}
 
         {isDualMetric && dualLabels ? (
           <Card>
@@ -535,6 +605,16 @@ export default function HabitDetailScreen() {
   );
 }
 
+// One labelled line of the quit spending card.
+function SpendingLine({ label, text, strong }: { label: string; text: string; strong?: boolean }) {
+  return (
+    <View style={styles.spendingLine}>
+      <Text style={styles.cardCaption}>{label}</Text>
+      <Text style={[styles.cardBody, strong ? styles.spendingStrong : null]}>{text}</Text>
+    </View>
+  );
+}
+
 // The line under the title. Health habits (medication, checkups) sit under the Health
 // category, so they read "Track your health", not "Build a good habit".
 function habitKindLabel(habit: Habit): string {
@@ -557,6 +637,11 @@ const styles = StyleSheet.create({
   tagText: { ...typography.label },
   cardTitle: { ...typography.body, fontWeight: "700", marginBottom: 4 },
   cardBody: { ...typography.body },
+  baselineBlock: { marginBottom: spacing.md, gap: 2 },
+  baselineText: { ...typography.body, fontWeight: "600" },
+  baselineButton: { alignSelf: "flex-start", marginTop: spacing.sm },
+  spendingLine: { marginTop: spacing.xs },
+  spendingStrong: { fontWeight: "700" },
   cardCaption: { ...typography.caption, marginTop: 2 },
   microtask: { ...typography.body, marginBottom: spacing.xs },
   label: { ...typography.label, marginTop: spacing.md, marginBottom: spacing.xs },

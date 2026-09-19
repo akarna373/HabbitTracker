@@ -43,7 +43,8 @@ export function TodayCarousel() {
   const reducedMotion = useReducedMotion();
 
   const cards = useMemo(() => buildReflectionCards({ habits, logsByHabit, today }), [habits, logsByHabit, today]);
-  const showMoney = summary.hasSufficientData;
+  // Also shown when a cost-tracked habit only lacks its baseline, so the card can say so.
+  const showMoney = summary.hasSufficientData || summary.habitsNeedingBaseline.length > 0;
   const pageCount = cards.length + (showMoney ? 1 : 0);
 
   // Each page is exactly as wide as the room inside the frame; measured once laid out.

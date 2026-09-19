@@ -10,6 +10,7 @@ import { GoalProgressBar } from "../components/GoalProgressBar";
 import { SummaryBackground } from "../components/SummaryBackground";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ScreenHeader } from "../components/ScreenHeader";
+import { formatLongDateForCalendar } from "../lib/calendarSettings";
 import { formatMoneyCompact } from "../lib/currency";
 import { computeGoalProgress, type HabitFinancialBreakdown } from "../lib/financialSummary";
 import { useFinancialSummary } from "../lib/financialSummarySelectors";
@@ -21,6 +22,7 @@ const EMPTY_MESSAGE = "Add cost details to a habit to discover how much you are 
 
 export default function TodaySummaryScreen() {
   const summary = useFinancialSummary();
+  const calendarType = useStore((s) => s.calendarType);
   const monthlyGoal = useStore((s) => s.financialSettings.monthlyGoal);
   const goal = summary.hasSufficientData ? computeGoalProgress(summary.savedThisMonth, monthlyGoal) : null;
 
@@ -38,12 +40,13 @@ export default function TodaySummaryScreen() {
             <View style={styles.hero}>
               <SummaryBackground />
               <View style={styles.heroContent}>
-                <Text style={styles.heroLabel}>Potential Savings Today</Text>
+                <Text style={styles.heroLabel}>Potential savings remaining today</Text>
                 <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-                  {formatMoneyCompact(summary.potentialSavingsToday)}
+                  {formatMoneyCompact(summary.potentialSavingsRemainingToday)}
                 </Text>
                 <Text style={styles.heroCaption}>
-                  The most you could keep today if you skip all of it. It becomes a real saving only once you log the day.
+                  What is still there to save today, measured against your original baseline. It goes down as you log, and
+                  becomes a real saving when the day ends.
                 </Text>
               </View>
             </View>
@@ -54,16 +57,20 @@ export default function TodaySummaryScreen() {
                 icon="checkmark-circle"
                 iconElement={<EasterEggTick color={summaryColors.saved} onUnlock={() => setPickerOpen(true)} />}
                 iconColor={summaryColors.saved}
-                label="Confirmed savings today"
-                caption={summary.confirmedSavingsToday > 0 ? "From habits you've logged today" : "Log a habit today to confirm a saving"}
-                value={formatMoneyCompact(summary.confirmedSavingsToday)}
+                label="Saved today (so far)"
+                caption={
+                  summary.savedToday > 0
+                    ? "Provisional - final when the day ends"
+                    : "Log today to see it; final when the day ends"
+                }
+                value={formatMoneyCompact(summary.savedToday)}
                 valueColor={summaryColors.saved}
               />
               <View style={styles.rowDivider} />
               <StatRow
                 icon="cash-outline"
                 iconColor={summaryColors.spent}
-                label="Today’s expenditure"
+                label="Today’s spending"
                 caption="What today's logs cost"
                 value={formatMoneyCompact(summary.spentToday)}
                 valueColor={summaryColors.spent}
@@ -71,6 +78,9 @@ export default function TodaySummaryScreen() {
             </Card>
 
             <Text style={styles.sectionLabel}>THIS MONTH</Text>
+            <Text style={styles.monthRange}>
+              {formatLongDateForCalendar(summary.monthStart, calendarType)} - {formatLongDateForCalendar(summary.monthEnd, calendarType)}
+            </Text>
             <Card>
               <View style={styles.monthRow}>
                 <View style={styles.monthCol}>
@@ -121,14 +131,14 @@ export default function TodaySummaryScreen() {
                       ? goal.exceededBy > 0
                         ? `You've saved ${formatMoneyCompact(goal.exceededBy)} beyond your goal this month.`
                         : "You've saved your goal amount this month."
-                      : `${formatMoneyCompact(goal.remaining)} more in confirmed savings to reach it.`}
+                      : `${formatMoneyCompact(goal.remaining)} more in savings to reach it.`}
                   </Text>
                   <PrimaryButton title="Edit goal" variant="outline" size="small" onPress={openGoalEditor} />
                 </>
               ) : (
                 <>
                   <Text style={styles.goalTitle}>No monthly goal yet</Text>
-                  <Text style={styles.goalCaption}>Pick an amount to aim for and watch your confirmed savings fill it.</Text>
+                  <Text style={styles.goalCaption}>Pick an amount to aim for and watch your savings fill it.</Text>
                   <PrimaryButton title="Set a monthly goal" onPress={openGoalEditor} style={styles.goalButton} />
                 </>
               )}
@@ -151,13 +161,15 @@ export default function TodaySummaryScreen() {
 
         <Text style={styles.sectionLabel}>HOW THIS IS COUNTED</Text>
         <Card>
-          <Text style={styles.explainTitle}>Only days you log count as confirmed savings</Text>
+          <Text style={styles.explainTitle}>A saving is earned when its day ends</Text>
           <Text style={styles.explainBody}>
-            A saving is confirmed by a log for that day, never assumed. A day with no log is unknown - it adds nothing to
-            savings or spending. Logging 0 marks a clean day and earns your full normal daily cost.
+            Each day is compared with the baseline you set up: baseline quantity x price, minus what you logged x price.
+            Today's figure is provisional; once the date changes it is final and joins this month's total.
           </Text>
           <Text style={styles.explainBody}>
-            Spending above your normal amount is always counted in full, but it never takes away savings from other days.
+            A day with no log is unknown - it adds nothing to savings or spending. Logging 0 marks a clean day and earns
+            the full baseline cost. Spending above your baseline is always counted, but it never takes away savings from
+            other days.
           </Text>
         </Card>
       </ScrollView>
@@ -202,13 +214,13 @@ function HabitBreakdownCard({ habit }: { habit: HabitFinancialBreakdown }) {
     <Card>
       <View style={styles.habitHeader}>
         <Text style={styles.habitName} numberOfLines={1}>
-          {habit.name}
+          {habit.archived ? `${habit.name} (archived)` : habit.name}
         </Text>
         {status ? <Text style={[styles.habitStatus, { color: status.color }]}>{status.text}</Text> : null}
       </View>
       <DetailRow label="Normal daily cost" value={formatMoneyCompact(habit.normalDailyCost)} />
       <DetailRow label="Logged spending this month" value={formatMoneyCompact(habit.spentThisMonth)} color={summaryColors.spent} />
-      <DetailRow label="Confirmed savings this month" value={formatMoneyCompact(habit.savedThisMonth)} color={summaryColors.saved} />
+      <DetailRow label="Saved this month (finished days)" value={formatMoneyCompact(habit.savedThisMonth)} color={summaryColors.saved} />
       <DetailRow label="Days logged" value={`${days} ${days === 1 ? "day" : "days"}`} />
     </Card>
   );
@@ -234,6 +246,7 @@ const styles = StyleSheet.create({
   heroValue: { color: summaryColors.text, fontSize: 44, fontWeight: "800", marginTop: 2, ...summaryColors.textShadow },
   heroCaption: { color: summaryColors.textDim, fontSize: 13, lineHeight: 19, marginTop: spacing.sm, ...summaryColors.textShadow },
   sectionLabel: { ...typography.label, marginTop: spacing.lg, marginBottom: spacing.sm },
+  monthRange: { ...typography.caption, marginTop: -spacing.xs, marginBottom: spacing.sm },
   statRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   statText: { flex: 1, minWidth: 0 },
   statLabel: { ...typography.body, fontWeight: "700" },

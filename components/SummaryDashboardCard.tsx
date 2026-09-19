@@ -14,6 +14,13 @@ import { GoalProgressBar } from "./GoalProgressBar";
 
 const EMPTY_MESSAGE = "Add cost details to a habit to discover how much you are saving.";
 
+// A cost-tracked habit from before baselines were stored has none to compare against;
+// the person sets it on that habit's screen.
+function baselineMessage(names: string[]): string {
+  const shown = names.length <= 2 ? names.join(" and ") : `${names[0]} and ${names.length - 1} more`;
+  return `Set the baseline for ${shown} to start counting savings.`;
+}
+
 export function SummaryDashboardCard() {
   const summary = useFinancialSummary();
   const monthlyGoal = useStore((s) => s.financialSettings.monthlyGoal);
@@ -41,6 +48,10 @@ export function SummaryDashboardCard() {
   };
 
   const { hasSufficientData } = summary;
+  const emptyMessage =
+    summary.habitsNeedingBaseline.length > 0
+      ? baselineMessage(summary.habitsNeedingBaseline.map((habit) => habit.name))
+      : EMPTY_MESSAGE;
   const goal = hasSufficientData ? computeGoalProgress(summary.savedThisMonth, monthlyGoal) : null;
 
   let goalSpoken = "";
@@ -53,10 +64,10 @@ export function SummaryDashboardCard() {
   }
 
   const accessibilityLabel = hasSufficientData
-    ? `Today's Summary. Potential savings today ${formatMoneyFull(summary.potentialSavingsToday)}. ` +
+    ? `Today's Summary. Potential savings remaining today ${formatMoneyFull(summary.potentialSavingsRemainingToday)}. ` +
       `Saved this month ${formatMoneyFull(summary.savedThisMonth)}. ` +
       `Spent this month ${formatMoneyFull(summary.spentThisMonth)}.${goalSpoken}`
-    : `Today's Summary. ${EMPTY_MESSAGE}`;
+    : `Today's Summary. ${emptyMessage}`;
 
   return (
     // Only the content of the money card: the frame and the scene behind it belong to
@@ -92,9 +103,9 @@ export function SummaryDashboardCard() {
 
           {hasSufficientData ? (
             <>
-              <Text style={styles.primaryLabel}>Potential Savings Today</Text>
+              <Text style={styles.primaryLabel}>Potential savings remaining today</Text>
               <Text style={styles.primaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-                {formatMoneyCompact(summary.potentialSavingsToday)}
+                {formatMoneyCompact(summary.potentialSavingsRemainingToday)}
               </Text>
 
               <View style={styles.divider} />
@@ -159,7 +170,7 @@ export function SummaryDashboardCard() {
               ) : null}
             </>
           ) : (
-            <Text style={styles.emptyText}>{EMPTY_MESSAGE}</Text>
+            <Text style={styles.emptyText}>{emptyMessage}</Text>
           )}
         </View>
 

@@ -2,6 +2,8 @@ import Storage from "expo-sqlite/kv-store";
 import * as TaskManager from "expo-task-manager";
 import type { NotificationResponse, NotificationTaskPayload } from "expo-notifications";
 import { getDb } from "./db";
+import { upsertLoggedAmount } from "./logWrites";
+import { syncSavingsLedger } from "./savingsLedgerDb";
 import { genId } from "./id";
 import { todayISO } from "./dates";
 import { parseDosageFrequency } from "./medicationParse";
@@ -212,12 +214,7 @@ async function markCheckedInToday(habitId: string): Promise<void> {
   );
   const id = existing?.id ?? genId();
   const nextAmount = Math.max(1, existing?.amount ?? 0);
-  await db.runAsync(
-    `INSERT INTO daily_logs (id, habitId, date, amount, microtasksDone, reflection)
-     VALUES (?,?,?,?,?,?)
-     ON CONFLICT(habitId, date) DO UPDATE SET amount = excluded.amount`,
-    [id, habitId, today, nextAmount, "[]", null]
-  );
+  await upsertLoggedAmount(db, { id, habitId, date: today, amount: nextAmount });
 }
 
 // Raw-DB version of the store's incrementAmount, for the same reason every
@@ -232,12 +229,14 @@ async function incrementHabitAmountToday(habitId: string, delta: number): Promis
   );
   const id = existing?.id ?? genId();
   const nextAmount = Math.max(0, (existing?.amount ?? 0) + delta);
-  await db.runAsync(
-    `INSERT INTO daily_logs (id, habitId, date, amount, microtasksDone, reflection)
-     VALUES (?,?,?,?,?,?)
-     ON CONFLICT(habitId, date) DO UPDATE SET amount = excluded.amount`,
-    [id, habitId, today, nextAmount, "[]", null]
-  );
+  await upsertLoggedAmount(db, { id, habitId, date: today, amount: nextAmount });
+  // The savings ledger follows the new count right away, even when this runs with no
+  // app UI (see lib/savingsLedgerDb.ts). Never lets a ledger problem undo the log.
+  try {
+    await syncSavingsLedger(db);
+  } catch (e) {
+    testLog("ledger sync failed", String(e));
+  }
 }
 
 // The hotspot deterrent alert, with inline "I {verb}" / "I didn't" /
@@ -470,12 +469,7 @@ async function markDoseTaken(habitId: string): Promise<void> {
   );
   const id = existing?.id ?? genId();
   const nextAmount = (existing?.amount ?? 0) + 1;
-  await db.runAsync(
-    `INSERT INTO daily_logs (id, habitId, date, amount, microtasksDone, reflection)
-     VALUES (?,?,?,?,?,?)
-     ON CONFLICT(habitId, date) DO UPDATE SET amount = excluded.amount`,
-    [id, habitId, today, nextAmount, "[]", null]
-  );
+  await upsertLoggedAmount(db, { id, habitId, date: today, amount: nextAmount });
   await adjustStock(habitId, 1);
 }
 

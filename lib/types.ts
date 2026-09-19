@@ -79,6 +79,11 @@ export interface DailyLog {
   amountB: number | null; // second value for a dual-metric habit (e.g. waist, diastolic)
   microtasksDone: string[]; // microtask ids completed this date
   reflection: string | null;
+  // True when the amount was recorded on purpose (the counter, "I stayed clean", a
+  // notification action). False when the row only exists because a microtask was
+  // ticked or a reflection saved - its amount of 0 is then a placeholder, not a report
+  // of zero consumption, so it must never earn a saving.
+  amountLogged: boolean;
 }
 
 export interface NewHabitDraft {

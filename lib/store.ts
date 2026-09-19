@@ -25,6 +25,9 @@ import { cancelMedicationNotifications, scheduleMedicationNotifications } from "
 import { parseDosageFrequency } from "./medicationParse";
 import { getSwipeSettings, saveSwipeSettings, type SwipeSettings } from "./swipeSettings";
 import { getCalendarType, saveCalendarType, type CalendarType } from "./calendarSettings";
+import { upsertLoggedAmount } from "./logWrites";
+import { deleteLedgerForHabit, loadLedgerRows, SET_BASELINE_SQL, syncSavingsLedger } from "./savingsLedgerDb";
+import type { LedgerRow } from "./savingsLedger";
 import type { DailyLog, FinancialSettings, GoalType, Habit, Microtask, NewHabitDraft, SmokeLocation } from "./types";
 
 interface HabitRow {
@@ -96,11 +99,13 @@ interface LogRow {
   amountB: number | null;
   microtasksDone: string;
   reflection: string | null;
+  amountLogged: number;
 }
 
 function rowToLog(row: LogRow): DailyLog {
-  return { ...row, microtasksDone: JSON.parse(row.microtasksDone) };
+  return { ...row, microtasksDone: JSON.parse(row.microtasksDone), amountLogged: row.amountLogged !== 0 };
 }
+
 
 interface StoreState {
   ready: boolean;
@@ -121,6 +126,16 @@ interface StoreState {
   chooseSummaryBackground: (index: number) => void;
   financialSettings: FinancialSettings;
   updateFinancialSettings: (changes: Partial<FinancialSettings>) => Promise<void>;
+  // The daily savings ledger (lib/savingsLedger.ts), mirrored from the database.
+  savingsLedger: LedgerRow[];
+  // Brings the ledger in line with the logs, finalizes every day that has ended, and
+  // reloads it. Safe to call as often as needed.
+  syncSavings: () => Promise<void>;
+  // Re-reads habits and logs from the database (a notification action may have written
+  // while the app was in the background), then syncs the ledger.
+  resume: () => Promise<void>;
+  // For a cost-tracked quit habit whose original baseline was never stored.
+  setBaseline: (habitId: string, quantity: number) => Promise<void>;
   init: () => Promise<void>;
   createHabit: (draft: NewHabitDraft) => Promise<string>;
   deleteHabit: (habitId: string) => Promise<void>;
@@ -155,6 +170,7 @@ export const useStore = create<StoreState>((set, get) => ({
   swipeSettings: { deleteEnabled: true, archiveEnabled: true },
   calendarType: "gregorian",
   financialSettings: DEFAULT_FINANCIAL_SETTINGS,
+  savingsLedger: [],
   summaryBackground: { index: 0, date: "" },
 
   // The easter-egg chooser: picks a background by hand. It starts a fresh
@@ -269,6 +285,18 @@ export const useStore = create<StoreState>((set, get) => ({
       habits[i] = { ...habit, summaryNotificationId: null };
     }
 
+    // Bring the savings ledger up to date before the first render: days that ended
+    // while the app was closed are finalized here, and anything a notification action
+    // logged in the meantime is picked up. A failure must never stop the app opening;
+    // the ledger is derived from the logs, so the next sync repairs it.
+    let savingsLedger: LedgerRow[] = [];
+    try {
+      await syncSavingsLedger(db);
+      savingsLedger = await loadLedgerRows(db);
+    } catch {
+      // leave it empty
+    }
+
     set({
       ready: true,
       habits,
@@ -279,12 +307,54 @@ export const useStore = create<StoreState>((set, get) => ({
       swipeSettings,
       calendarType,
       financialSettings,
+      savingsLedger,
       summaryBackground,
     });
 
     // Android clears registered geofences on reboot, so re-register on every
     // app open - same defensive pattern as the notification reschedule above.
     syncGeofences(habits, smokeLocationsByHabit);
+  },
+
+  syncSavings: async () => {
+    try {
+      const db = await getDb();
+      const plan = await syncSavingsLedger(db);
+      if (plan.upserts.length > 0 || plan.deletes.length > 0) set({ savingsLedger: await loadLedgerRows(db) });
+    } catch {
+      // Derived from the logs, so the next sync repairs whatever this one missed.
+    }
+  },
+
+  resume: async () => {
+    try {
+      const db = await getDb();
+      const habitRows = await db.getAllAsync<HabitRow>("SELECT * FROM habits WHERE archivedAt IS NULL ORDER BY createdAt ASC");
+      const archivedRows = await db.getAllAsync<HabitRow>("SELECT * FROM habits WHERE archivedAt IS NOT NULL ORDER BY archivedAt DESC");
+      const logRows = await db.getAllAsync<LogRow>("SELECT * FROM daily_logs");
+      const logsByHabit: Record<string, DailyLog[]> = {};
+      for (const row of logRows) (logsByHabit[row.habitId] ??= []).push(rowToLog(row));
+      set({ habits: habitRows.map(rowToHabit), archivedHabits: archivedRows.map(rowToHabit), logsByHabit });
+      await syncSavingsLedger(db);
+      set({ savingsLedger: await loadLedgerRows(db) });
+    } catch {
+      // Keep showing what is already loaded.
+    }
+  },
+
+  // Only fills a baseline that was never stored. A baseline that already exists is the
+  // original setup value and is not overwritten here. The new value applies to the
+  // habit's logged days, so the ledger is rebuilt right after.
+  setBaseline: async (habitId, quantity) => {
+    if (!Number.isFinite(quantity) || quantity <= 0) return;
+    const db = await getDb();
+    await db.runAsync(SET_BASELINE_SQL, [quantity, habitId]);
+    set((s) => ({
+      habits: s.habits.map((h) =>
+        h.id === habitId && (h.baselineQuantity === null || h.baselineQuantity <= 0) ? { ...h, baselineQuantity: quantity } : h
+      ),
+    }));
+    await get().syncSavings();
   },
 
   createHabit: async (draft) => {
@@ -459,6 +529,7 @@ export const useStore = create<StoreState>((set, get) => ({
     await db.runAsync("DELETE FROM microtasks WHERE habitId = ?", [habitId]);
     await db.runAsync("DELETE FROM daily_logs WHERE habitId = ?", [habitId]);
     await db.runAsync("DELETE FROM smoke_locations WHERE habitId = ?", [habitId]);
+    await deleteLedgerForHabit(db, habitId);
 
     set((s) => {
       const { [habitId]: _m, ...restMicrotasks } = s.microtasksByHabit;
@@ -470,6 +541,7 @@ export const useStore = create<StoreState>((set, get) => ({
         microtasksByHabit: restMicrotasks,
         logsByHabit: restLogs,
         smokeLocationsByHabit: restSmokeLocations,
+        savingsLedger: s.savingsLedger.filter((row) => row.habitId !== habitId),
       };
     });
   },
@@ -494,6 +566,8 @@ export const useStore = create<StoreState>((set, get) => ({
         archivedHabits: [{ ...habit, archivedAt: now }, ...s.archivedHabits],
       };
     });
+    // Days after the archive date stop counting; the days before it stay.
+    void get().syncSavings();
   },
 
   restoreHabit: async (habitId) => {
@@ -508,6 +582,7 @@ export const useStore = create<StoreState>((set, get) => ({
         habits: [...s.habits, { ...habit, archivedAt: null }],
       };
     });
+    void get().syncSavings();
   },
 
   // Re-reads one habit's row and logs from the DB - for writes that bypass
@@ -521,6 +596,8 @@ export const useStore = create<StoreState>((set, get) => ({
       habits: habitRow && !habitRow.archivedAt ? s.habits.map((h) => (h.id === habitId ? rowToHabit(habitRow) : h)) : s.habits,
       logsByHabit: { ...s.logsByHabit, [habitId]: logRows.map(rowToLog) },
     }));
+    // A notification action changed this habit's count: bring the ledger along too.
+    await get().syncSavings();
   },
 
   incrementAmount: async (habitId, date, delta) => {
@@ -529,23 +606,21 @@ export const useStore = create<StoreState>((set, get) => ({
     const nextAmount = Math.max(0, (existing?.amount ?? 0) + delta);
     const id = existing?.id ?? genId();
 
-    await db.runAsync(
-      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection)
-       VALUES (?,?,?,?,?,?,?)
-       ON CONFLICT(habitId, date) DO UPDATE SET amount = excluded.amount`,
-      [id, habitId, date, nextAmount, existing?.amountB ?? null, "[]", null]
-    );
+    await upsertLoggedAmount(db, { id, habitId, date, amount: nextAmount, amountB: existing?.amountB ?? null });
 
     set((s) => {
       const logs = s.logsByHabit[habitId] ?? [];
       const idx = logs.findIndex((l) => l.date === date);
       const updated: DailyLog =
         idx >= 0
-          ? { ...logs[idx], amount: nextAmount }
-          : { id, habitId, date, amount: nextAmount, amountB: null, microtasksDone: [], reflection: null };
+          ? { ...logs[idx], amount: nextAmount, amountLogged: true }
+          : { id, habitId, date, amount: nextAmount, amountB: null, microtasksDone: [], reflection: null, amountLogged: true };
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
+
+    // The savings ledger follows every count immediately (see lib/savingsLedger.ts).
+    void get().syncSavings();
 
     // Logging a cigarette (never undoing one) on a location-tracked habit
     // silently records where the user is - runs in the background so it
@@ -694,9 +769,11 @@ export const useStore = create<StoreState>((set, get) => ({
     const id = existing?.id ?? genId();
     const doneJson = JSON.stringify(nextDone);
 
+    // A row created just to hold a ticked microtask is a placeholder (amountLogged 0):
+    // its amount of 0 must not read as "logged zero consumption".
     await db.runAsync(
-      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection)
-       VALUES (?,?,?,?,?,?,?)
+      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection, amountLogged)
+       VALUES (?,?,?,?,?,?,?,0)
        ON CONFLICT(habitId, date) DO UPDATE SET microtasksDone = excluded.microtasksDone`,
       [id, habitId, date, 0, existing?.amountB ?? null, doneJson, null]
     );
@@ -707,7 +784,7 @@ export const useStore = create<StoreState>((set, get) => ({
       const updated: DailyLog =
         idx >= 0
           ? { ...logs[idx], microtasksDone: nextDone }
-          : { id, habitId, date, amount: 0, amountB: null, microtasksDone: nextDone, reflection: null };
+          : { id, habitId, date, amount: 0, amountB: null, microtasksDone: nextDone, reflection: null, amountLogged: false };
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
@@ -730,9 +807,10 @@ export const useStore = create<StoreState>((set, get) => ({
     const existing = get().logsByHabit[habitId]?.find((l) => l.date === date);
     const id = existing?.id ?? genId();
 
+    // Same as a ticked microtask: a row made only to hold a reflection is a placeholder.
     await db.runAsync(
-      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection)
-       VALUES (?,?,?,?,?,?,?)
+      `INSERT INTO daily_logs (id, habitId, date, amount, amountB, microtasksDone, reflection, amountLogged)
+       VALUES (?,?,?,?,?,?,?,0)
        ON CONFLICT(habitId, date) DO UPDATE SET reflection = excluded.reflection`,
       [id, habitId, date, 0, existing?.amountB ?? null, "[]", text]
     );
@@ -743,7 +821,7 @@ export const useStore = create<StoreState>((set, get) => ({
       const updated: DailyLog =
         idx >= 0
           ? { ...logs[idx], reflection: text }
-          : { id, habitId, date, amount: 0, amountB: null, microtasksDone: [], reflection: text };
+          : { id, habitId, date, amount: 0, amountB: null, microtasksDone: [], reflection: text, amountLogged: false };
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
@@ -833,7 +911,7 @@ export const useStore = create<StoreState>((set, get) => ({
       const updated: DailyLog =
         idx >= 0
           ? { ...logs[idx], amount: amountA, amountB }
-          : { id, habitId, date, amount: amountA, amountB, microtasksDone: [], reflection: null };
+          : { id, habitId, date, amount: amountA, amountB, microtasksDone: [], reflection: null, amountLogged: true };
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
@@ -867,7 +945,9 @@ export const useStore = create<StoreState>((set, get) => ({
       const logs = s.logsByHabit[habitId] ?? [];
       const idx = logs.findIndex((l) => l.date === today);
       const updated: DailyLog =
-        idx >= 0 ? { ...logs[idx], amount: 1 } : { id: logId, habitId, date: today, amount: 1, amountB: null, microtasksDone: [], reflection: null };
+        idx >= 0
+          ? { ...logs[idx], amount: 1 }
+          : { id: logId, habitId, date: today, amount: 1, amountB: null, microtasksDone: [], reflection: null, amountLogged: true };
       const nextLogs = idx >= 0 ? logs.map((l, i) => (i === idx ? updated : l)) : [...logs, updated];
       return { logsByHabit: { ...s.logsByHabit, [habitId]: nextLogs } };
     });
