@@ -54,7 +54,7 @@ export function baselineLine(habit: BaselineHabit): string | null {
 // "Today's target: 4 sticks or fewer" for a reducing habit, "0 sticks" for quitting
 // completely, nothing for tracking only (there is no target to aim at).
 export function targetLine(
-  habit: Pick<Habit, "baselineQuantity" | "unit" | "goalType" | "createdAt" | "reduceDays">,
+  habit: Pick<Habit, "baselineQuantity" | "unit" | "goalType" | "createdAt" | "reduceDays" | "termsHistory">,
   today: string
 ): string | null {
   if (!hasRecoverableBaseline(habit)) return null;

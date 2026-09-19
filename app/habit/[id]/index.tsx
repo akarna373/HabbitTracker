@@ -60,7 +60,6 @@ export default function HabitDetailScreen() {
   const setExactStock = useStore((s) => s.setExactStock);
   const calendarType = useStore((s) => s.calendarType);
   const deleteHabit = useStore((s) => s.deleteHabit);
-  const setBaseline = useStore((s) => s.setBaseline);
   const setLocationTracking = useStore((s) => s.setLocationTracking);
   const setBackgroundLocationTracking = useStore((s) => s.setBackgroundLocationTracking);
   const smokeLocations = useStore((s) => s.smokeLocationsByHabit[id ?? ""]);
@@ -79,8 +78,6 @@ export default function HabitDetailScreen() {
   const [showRestockModal, setShowRestockModal] = useState(false);
   const [restockMode, setRestockMode] = useState<"add" | "set">("add");
   const [restockQty, setRestockQty] = useState("");
-  const [showBaselineModal, setShowBaselineModal] = useState(false);
-  const [baselineInput, setBaselineInput] = useState("");
 
   useEffect(() => {
     setReflection(log?.reflection ?? "");
@@ -240,10 +237,7 @@ export default function HabitDetailScreen() {
                 title="Set baseline"
                 variant="outline"
                 size="small"
-                onPress={() => {
-                  setBaselineInput("");
-                  setShowBaselineModal(true);
-                }}
+                onPress={() => router.push(`/habit/edit-terms?habitId=${habit.id}`)}
                 style={styles.baselineButton}
               />
             </View>
@@ -251,6 +245,13 @@ export default function HabitDetailScreen() {
             <View style={styles.baselineBlock}>
               {baselineText ? <Text style={styles.baselineText}>{baselineText}</Text> : null}
               {targetText ? <Text style={styles.baselineText}>{targetText}</Text> : null}
+              <PrimaryButton
+                title="Edit baseline and price"
+                variant="outline"
+                size="small"
+                onPress={() => router.push(`/habit/edit-terms?habitId=${habit.id}`)}
+                style={styles.baselineButton}
+              />
             </View>
           )}
 
@@ -327,37 +328,6 @@ export default function HabitDetailScreen() {
           <TestNotificationButton habit={habit} todayAmount={amount} />
           <PrimaryButton title="Delete habit" variant="outline" onPress={confirmDelete} style={styles.deleteButton} />
         </ScrollView>
-
-        <Modal visible={showBaselineModal} transparent animationType="fade" onRequestClose={() => setShowBaselineModal(false)}>
-          <View style={styles.restockOverlay}>
-            <View style={styles.restockCard}>
-              <Text style={styles.cardTitle}>{`How many ${habit.unit ?? "units"} a day did you have before you started?`}</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                placeholder="e.g. 4"
-                placeholderTextColor={colors.textMuted}
-                value={baselineInput}
-                onChangeText={(t) => setBaselineInput(t.replace(/[^0-9.]/g, ""))}
-                autoFocus
-              />
-              <Text style={styles.cardCaption}>This is your starting point. Savings are measured against it.</Text>
-              <View style={styles.restockButtonRow}>
-                <PrimaryButton title="Cancel" variant="outline" style={styles.restockButton} onPress={() => setShowBaselineModal(false)} />
-                <PrimaryButton
-                  title="Save"
-                  style={styles.restockButton}
-                  disabled={!(Number(baselineInput) > 0)}
-                  onPress={() => {
-                    const quantity = Number(baselineInput);
-                    if (quantity > 0) void setBaseline(habit.id, quantity);
-                    setShowBaselineModal(false);
-                  }}
-                />
-              </View>
-            </View>
-          </View>
-        </Modal>
       </SafeAreaView>
     );
   }

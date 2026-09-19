@@ -269,6 +269,14 @@ export function getQuitCopy(
   };
 }
 
+// "0 chew-free days", "1 smoke-free day", "3 sober days": the count worded for the habit, with the
+// singular for exactly one. Every screen that shows clean days uses this, so none of them can name
+// the wrong habit or say "1 days".
+export function formatFreeDays(count: number, templateId?: string | null): string {
+  const { daysLabel } = getQuitCopy(templateId);
+  return `${count} ${count === 1 ? daysLabel.replace(/days$/, "day") : daysLabel}`;
+}
+
 export const CUSTOM_QUIT_TEMPLATE_ID = "custom-quit";
 
 export interface CategoryOption {

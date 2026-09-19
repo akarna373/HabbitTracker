@@ -1,6 +1,7 @@
 import { isoDate } from "./dates";
 import { isHabitScheduledOn, isRealISODate } from "./habitSchedule";
 import type { MonthRange } from "./monthRange";
+import { termsOn } from "./termsHistory";
 import type { DailyLog, Habit } from "./types";
 
 // The daily savings ledger: one record per cost-tracked quit habit per local
@@ -61,7 +62,17 @@ export function computeAmounts(baselineQuantity: number, unitPriceMinor: number,
 // columns, so it also works in the headless notification runtime.
 export type SavingsHabit = Pick<
   Habit,
-  "id" | "name" | "kind" | "hasCost" | "baselineQuantity" | "pricePerItem" | "repeatDays" | "frequencyType" | "createdAt" | "archivedAt"
+  | "id"
+  | "name"
+  | "kind"
+  | "hasCost"
+  | "baselineQuantity"
+  | "pricePerItem"
+  | "termsHistory"
+  | "repeatDays"
+  | "frequencyType"
+  | "createdAt"
+  | "archivedAt"
 >;
 
 function isPositiveFinite(value: unknown): value is number {
@@ -99,6 +110,16 @@ export function getSavingsTerms(habit: Pick<Habit, "kind" | "hasCost" | "baselin
   const unitPriceMinor = toMinor(pricePerItem);
   if (!Number.isFinite(costMinor(baselineQuantity, unitPriceMinor))) return null;
   return { baselineQuantity, unitPriceMinor };
+}
+
+// The terms that applied ON `date`, from the habit's history (see lib/termsHistory.ts), under the
+// same rules as getSavingsTerms. This is what makes a price change count from the day it was made
+// and never touch an earlier day.
+export function getSavingsTermsOn(
+  habit: Pick<Habit, "kind" | "hasCost" | "baselineQuantity" | "pricePerItem" | "termsHistory">,
+  date: string
+): SavingsTerms | null {
+  return getSavingsTerms({ kind: habit.kind, hasCost: habit.hasCost, ...termsOn(habit, date) });
 }
 
 // The part of a daily log the ledger reads.
@@ -180,10 +201,13 @@ function sameContent(a: LedgerRow, b: LedgerRow): boolean {
 //   after the day it was created, not after it was archived, not in the future, and on
 //   a scheduled day. No log means unknown, so no record and no saving.
 // - A record for a day before `today` is final (stamped once); today's stays provisional.
+// - A day after `today` that has a log is left alone (see afterToday below): a brief step back of
+//   the phone's date must not delete a real day's record.
 // - A final record keeps the baseline and price it was measured with. Only its logged
 //   quantity follows an edited log. A provisional record follows the habit's current terms.
-// - A habit with no usable terms (missing baseline) is skipped entirely and its existing
-//   records are left alone.
+// - A day is measured with the terms in force on that day (the habit's history), so a price
+//   change reaches only the days from it onward. A day with no usable terms (a missing baseline)
+//   is left exactly as it is.
 export function planLedgerSync(input: LedgerPlanInput): LedgerPlan {
   const { habits, logsByHabit, existing, today, nowISO } = input;
   const upserts: LedgerRow[] = [];
@@ -200,23 +224,34 @@ export function planLedgerSync(input: LedgerPlanInput): LedgerPlan {
   }
 
   for (const habit of habits) {
-    const terms = getSavingsTerms(habit);
-    if (!terms) continue;
+    if (habit.kind !== "quit" || habit.hasCost !== true) continue;
 
     const created = localDateOf(habit.createdAt);
     const archivedOn = habit.archivedAt ? localDateOf(habit.archivedAt) : null;
     const lastDay = archivedOn !== null && archivedOn < today ? archivedOn : today;
 
     const quantityByDate = new Map<string, number>();
+    // Dates after `today` that already have a log. The phone's date can step back for a moment (a
+    // border crossing that flips its time zone, or a corrected clock), which makes a real day look
+    // like the future. Such a day's record is left exactly as it is - neither rebuilt nor removed -
+    // and is picked up again as soon as the date catches up.
+    const afterToday = new Set<string>();
     for (const log of logsByHabit[habit.id] ?? []) {
       if (!isUsableLog(log) || !isRealISODate(log.date)) continue;
       if (created !== null && log.date < created) continue;
+      if (log.date > today) {
+        afterToday.add(log.date);
+        continue;
+      }
       if (log.date > lastDay) continue;
       if (!isHabitScheduledOn(habit, log.date)) continue;
       quantityByDate.set(log.date, log.amount);
     }
 
     for (const [date, quantity] of quantityByDate) {
+      // No usable terms that day: its record (if any) is left exactly as it is.
+      const terms = getSavingsTermsOn(habit, date);
+      if (!terms) continue;
       const previous = existingByKey.get(rowKey(habit.id, date));
       const isFinal = previous?.finalizedAt != null;
       const measuredWith =
@@ -238,7 +273,7 @@ export function planLedgerSync(input: LedgerPlanInput): LedgerPlan {
     }
 
     for (const row of existingByHabit.get(habit.id) ?? []) {
-      if (!quantityByDate.has(row.date)) deletes.push({ habitId: row.habitId, date: row.date });
+      if (!quantityByDate.has(row.date) && !afterToday.has(row.date)) deletes.push({ habitId: row.habitId, date: row.date });
     }
   }
 

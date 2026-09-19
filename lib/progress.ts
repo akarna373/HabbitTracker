@@ -1,4 +1,6 @@
 import { addDays, daysBetween, isoDate, last7Days, last7DaysEndingDaysAgo, todayISO } from "./dates";
+import { isUsableLog } from "./savingsLedger";
+import { termsOn } from "./termsHistory";
 import type { DailyLog, Habit } from "./types";
 
 export function selectLogForDate(logs: DailyLog[] | undefined, date: string): DailyLog | undefined {
@@ -30,27 +32,35 @@ export function isHabitCompleteOn(habit: Habit, logs: DailyLog[] | undefined, da
   return (log?.amount ?? 0) >= (habit.targetAmount ?? Infinity);
 }
 
+// The baseline and price in force on `date` (today when none is given). A change of price only
+// applies from the day it was made, so every figure below asks for the day it is about.
+function termsFor(habit: Habit, date?: string) {
+  return termsOn(habit, date ?? todayISO());
+}
+
 // For most cost-tracked habits, pricePerItem already means "per dose/unit
 // consumed". Medication with stock tracking on is the one exception -
 // there the user enters the price of a whole packet, so this divides it
 // down to a per-tablet price first. Every other habit falls through
 // unchanged.
-export function pricePerDose(habit: Habit): number {
-  if (!habit.pricePerItem) return 0;
+export function pricePerDose(habit: Habit, date?: string): number {
+  const { pricePerItem } = termsFor(habit, date);
+  if (!pricePerItem) return 0;
   if (habit.templateId === "medication" && habit.tabletsPerPacket) {
-    return habit.pricePerItem / habit.tabletsPerPacket;
+    return pricePerItem / habit.tabletsPerPacket;
   }
-  return habit.pricePerItem;
+  return pricePerItem;
 }
 
-export function costForAmount(habit: Habit, amount: number): number {
-  if (!habit.hasCost || !habit.pricePerItem) return 0;
-  return amount * pricePerDose(habit);
+export function costForAmount(habit: Habit, amount: number, date?: string): number {
+  if (!habit.hasCost || !termsFor(habit, date).pricePerItem) return 0;
+  return amount * pricePerDose(habit, date);
 }
 
-export function baselineCost(habit: Habit): number {
-  if (!habit.hasCost || !habit.pricePerItem || !habit.baselineQuantity) return 0;
-  return habit.baselineQuantity * habit.pricePerItem;
+export function baselineCost(habit: Habit, date?: string): number {
+  const { baselineQuantity, pricePerItem } = termsFor(habit, date);
+  if (!habit.hasCost || !pricePerItem || !baselineQuantity) return 0;
+  return baselineQuantity * pricePerItem;
 }
 
 // "Reduce, then reach zero": a 14-day cycle anchored on the habit's own
@@ -58,7 +68,7 @@ export function baselineCost(habit: Habit): number {
 // target declines linearly to 0 by day 14, and stays at 0 after (maintenance).
 export const REDUCE_CYCLE_DAYS = 14;
 
-type ReduceCycleHabit = Pick<Habit, "createdAt" | "baselineQuantity" | "reduceDays">;
+type ReduceCycleHabit = Pick<Habit, "createdAt" | "baselineQuantity" | "reduceDays" | "termsHistory">;
 
 // createdAt is a UTC ISO string but every other date here is the device's
 // local date - slicing it directly puts a habit created late evening (west
@@ -76,12 +86,15 @@ export function reduceCycleDay(habit: Habit): number {
   return reduceCycleDayForDate(habit, todayISO());
 }
 
+// A day's target is worked out from the baseline in force ON THAT DAY, so changing the baseline
+// moves the targets from then on and leaves finished days (and the streak they built) alone.
 export function reduceDailyTargetForDate(habit: ReduceCycleHabit, date: string): number {
-  if (!habit.baselineQuantity) return 0;
+  const { baselineQuantity } = termsOn(habit, date);
+  if (!baselineQuantity) return 0;
   const cycleDays = habit.reduceDays ?? REDUCE_CYCLE_DAYS;
   const day = Math.max(1, reduceCycleDayForDate(habit, date));
   if (day >= cycleDays || cycleDays <= 1) return 0;
-  return Math.round((habit.baselineQuantity * (cycleDays - day)) / (cycleDays - 1));
+  return Math.round((baselineQuantity * (cycleDays - day)) / (cycleDays - 1));
 }
 
 export function reduceDailyTarget(habit: Habit): number {
@@ -120,21 +133,26 @@ export function weeklyCompletion(habits: Habit[], logsByHabit: Record<string, Da
   return { completed, total, perDay };
 }
 
+// Days this week that were logged as exactly 0. Only an amount recorded on purpose counts (the same
+// rule as the savings ledger): a row that exists only because a reflection was saved or a microtask
+// ticked has an amount of 0 too, but it is not a report of a clean day.
 export function smokeFreeDaysThisWeek(habit: Habit, logs: DailyLog[] | undefined): number {
   return last7Days().filter((date) => {
     const log = selectLogForDate(logs, date);
-    return log !== undefined && log.amount === 0;
+    return log !== undefined && isUsableLog(log) && log.amount === 0;
   }).length;
 }
 
 export function estimatedSavingsThisWeek(habit: Habit, logs: DailyLog[] | undefined): number {
   if (!habit.hasCost) return 0;
-  const baseline = baselineCost(habit);
   return last7Days().reduce((sum, date) => {
     const log = selectLogForDate(logs, date);
-    if (!log) return sum;
-    const spent = costForAmount(habit, log.amount);
-    return sum + Math.max(0, baseline - spent);
+    // A day nobody logged is unknown, not zero consumption: it saves nothing. That includes a
+    // placeholder row made by a reflection or a ticked microtask (see DailyLog.amountLogged).
+    if (!log || !isUsableLog(log)) return sum;
+    // Each day is measured with the baseline and price of that day.
+    const spent = costForAmount(habit, log.amount, date);
+    return sum + Math.max(0, baselineCost(habit, date) - spent);
   }, 0);
 }
 
@@ -153,7 +171,7 @@ export function totalCostThisWeek(habit: Habit, logs: DailyLog[] | undefined): n
   return last7Days().reduce((sum, date) => {
     const log = selectLogForDate(logs, date);
     if (!log) return sum;
-    return sum + costForAmount(habit, log.amount);
+    return sum + costForAmount(habit, log.amount, date);
   }, 0);
 }
 

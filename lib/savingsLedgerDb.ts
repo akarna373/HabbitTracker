@@ -1,5 +1,6 @@
 import { todayISO } from "./dates";
 import {
+  localDateOf,
   planLedgerSync,
   type LedgerKey,
   type LedgerLog,
@@ -7,6 +8,7 @@ import {
   type LedgerRow,
   type SavingsHabit,
 } from "./savingsLedger";
+import type { TermsEntry } from "./types";
 
 // The database side of the savings ledger (see lib/savingsLedger.ts for the maths
 // and the rules). It takes the database as an argument and reads only what it needs
@@ -41,6 +43,16 @@ export const SAVINGS_LEDGER_DDL = `
     PRIMARY KEY (habitId, date)
   );
   CREATE INDEX IF NOT EXISTS idx_daily_savings_date ON daily_savings (date);
+
+  -- Every baseline and price a cost-tracked habit has had, each from the date it began (see
+  -- lib/termsHistory.ts). Money maths for a day reads the entry in force on that day.
+  CREATE TABLE IF NOT EXISTS habit_terms (
+    habitId TEXT NOT NULL,
+    effectiveFrom TEXT NOT NULL,
+    baselineQuantity REAL,
+    pricePerItem REAL,
+    PRIMARY KEY (habitId, effectiveFrom)
+  );
 `;
 
 // Adds daily_logs.amountLogged (see DailyLog in lib/types.ts) once, on the first run
@@ -66,11 +78,6 @@ export async function migrateAmountLoggedColumn(db: LedgerDb): Promise<boolean> 
   return true;
 }
 
-// Fills in a baseline that was never stored. The WHERE clause is what protects the
-// original setup value: a habit that already has one is never overwritten.
-export const SET_BASELINE_SQL =
-  "UPDATE habits SET baselineQuantity = ? WHERE id = ? AND (baselineQuantity IS NULL OR baselineQuantity <= 0)";
-
 export async function loadLedgerRows(db: LedgerDb): Promise<LedgerRow[]> {
   return db.getAllAsync<LedgerRow>(
     `SELECT habitId, date, baselineQuantity, unitPriceMinor, actualQuantity, baselineCostMinor,
@@ -80,8 +87,56 @@ export async function loadLedgerRows(db: LedgerDb): Promise<LedgerRow[]> {
   );
 }
 
-export async function deleteLedgerForHabit(db: LedgerDb, habitId: string): Promise<void> {
+// Everything the savings feature keeps for a habit that is being deleted.
+export async function deleteSavingsDataForHabit(db: LedgerDb, habitId: string): Promise<void> {
   await db.runAsync("DELETE FROM daily_savings WHERE habitId = ?", [habitId]);
+  await db.runAsync("DELETE FROM habit_terms WHERE habitId = ?", [habitId]);
+}
+
+// Gives every cost-tracked habit that has no history yet its first entry: the baseline and price
+// it has now, from the day it was created. Habits from before the history existed have never had
+// their terms edited, so what they hold now is what they began with. Safe to repeat.
+export async function ensureTermsHistory(db: LedgerDb, habitId?: string): Promise<void> {
+  const rows = await db.getAllAsync<{
+    id: string;
+    createdAt: string;
+    baselineQuantity: number | null;
+    pricePerItem: number | null;
+  }>(
+    `SELECT id, createdAt, baselineQuantity, pricePerItem FROM habits
+     WHERE hasCost = 1 AND id NOT IN (SELECT habitId FROM habit_terms)${habitId === undefined ? "" : " AND id = ?"}`,
+    habitId === undefined ? [] : [habitId]
+  );
+  for (const row of rows) {
+    await db.runAsync(
+      "INSERT OR IGNORE INTO habit_terms (habitId, effectiveFrom, baselineQuantity, pricePerItem) VALUES (?,?,?,?)",
+      [row.id, localDateOf(row.createdAt) ?? "1970-01-01", row.baselineQuantity, row.pricePerItem]
+    );
+  }
+}
+
+// Each habit's entries, oldest first.
+export async function loadTermsHistory(db: LedgerDb, habitId?: string): Promise<Record<string, TermsEntry[]>> {
+  const rows = await db.getAllAsync<{
+    habitId: string;
+    effectiveFrom: string;
+    baselineQuantity: number | null;
+    pricePerItem: number | null;
+  }>(
+    `SELECT habitId, effectiveFrom, baselineQuantity, pricePerItem FROM habit_terms${
+      habitId === undefined ? "" : " WHERE habitId = ?"
+    } ORDER BY effectiveFrom ASC`,
+    habitId === undefined ? [] : [habitId]
+  );
+  const byHabit: Record<string, TermsEntry[]> = {};
+  for (const row of rows) {
+    (byHabit[row.habitId] ??= []).push({
+      effectiveFrom: row.effectiveFrom,
+      baselineQuantity: row.baselineQuantity,
+      pricePerItem: row.pricePerItem,
+    });
+  }
+  return byHabit;
 }
 
 interface HabitRowLite {
@@ -150,6 +205,8 @@ async function writePlan(db: LedgerDb, plan: LedgerPlan): Promise<void> {
 }
 
 async function runSync(db: LedgerDb, today: string, nowISO: string): Promise<LedgerPlan> {
+  await ensureTermsHistory(db);
+  const historyByHabit = await loadTermsHistory(db);
   const habitRows = await db.getAllAsync<HabitRowLite>(
     `SELECT id, name, kind, hasCost, baselineQuantity, pricePerItem, repeatDays, frequencyType, createdAt, archivedAt
      FROM habits WHERE kind = 'quit' AND hasCost = 1`,
@@ -162,6 +219,7 @@ async function runSync(db: LedgerDb, today: string, nowISO: string): Promise<Led
     hasCost: true,
     baselineQuantity: row.baselineQuantity,
     pricePerItem: row.pricePerItem,
+    termsHistory: historyByHabit[row.id],
     repeatDays: parseRepeatDays(row.repeatDays),
     frequencyType: row.frequencyType as SavingsHabit["frequencyType"],
     createdAt: row.createdAt,
@@ -182,6 +240,64 @@ async function runSync(db: LedgerDb, today: string, nowISO: string): Promise<Led
   const plan = planLedgerSync({ habits, logsByHabit, existing, today, nowISO });
   if (plan.upserts.length > 0 || plan.deletes.length > 0) await writePlan(db, plan);
   return plan;
+}
+
+// Which days a change of baseline or price applies to.
+//  - "from_today": the price or baseline really changed. It is added to the habit's history as a
+//    new entry starting today. Every earlier day keeps the terms it had - in the dashboard, the
+//    weekly estimates, the targets and the streak.
+//  - "all_days": the setup values were a mistake. The history is replaced by a single entry from the
+//    day the habit was created, and every logged day is recalculated.
+export type TermsChangeScope = "from_today" | "all_days";
+
+// Saves a new baseline and price for a cost-tracked quit habit and brings the ledger in line.
+// Returns false, changing nothing, when the values are not usable or the habit is not a
+// cost-tracked quit habit. Also how a habit that never had a baseline gets one.
+export async function updateHabitTerms(
+  db: LedgerDb,
+  habitId: string,
+  terms: { baselineQuantity: number; pricePerItem: number },
+  scope: TermsChangeScope,
+  options: { today?: string; nowISO?: string } = {}
+): Promise<boolean> {
+  const { baselineQuantity, pricePerItem } = terms;
+  if (!Number.isFinite(baselineQuantity) || baselineQuantity <= 0) return false;
+  if (!Number.isFinite(pricePerItem) || pricePerItem < 0) return false;
+  const today = options.today ?? todayISO();
+
+  const insertEntry =
+    "INSERT INTO habit_terms (habitId, effectiveFrom, baselineQuantity, pricePerItem) VALUES (?,?,?,?)";
+
+  let changed = false;
+  await db.withTransactionAsync(async () => {
+    // Record the terms being replaced first. Without an entry for them, the days before this
+    // change would fall back to the NEW values.
+    await ensureTermsHistory(db, habitId);
+
+    const result = (await db.runAsync(
+      "UPDATE habits SET baselineQuantity = ?, pricePerItem = ? WHERE id = ? AND kind = 'quit' AND hasCost = 1",
+      [baselineQuantity, pricePerItem, habitId]
+    )) as { changes?: number | bigint } | undefined;
+    changed = Number(result?.changes ?? 0) > 0;
+    if (!changed) return;
+
+    if (scope === "all_days") {
+      const [habit] = await db.getAllAsync<{ createdAt: string }>("SELECT createdAt FROM habits WHERE id = ?", [habitId]);
+      await db.runAsync("DELETE FROM habit_terms WHERE habitId = ?", [habitId]);
+      await db.runAsync(insertEntry, [habitId, (habit && localDateOf(habit.createdAt)) ?? today, baselineQuantity, pricePerItem]);
+      // Dropping the records lets the sync below rebuild every day from the logs with the new terms.
+      await db.runAsync("DELETE FROM daily_savings WHERE habitId = ?", [habitId]);
+    } else {
+      await db.runAsync(
+        `${insertEntry}
+         ON CONFLICT(habitId, effectiveFrom) DO UPDATE SET
+           baselineQuantity = excluded.baselineQuantity, pricePerItem = excluded.pricePerItem`,
+        [habitId, today, baselineQuantity, pricePerItem]
+      );
+    }
+  });
+  if (changed) await syncSavingsLedger(db, options);
+  return changed;
 }
 
 // Runs one at a time in this JS runtime, so two triggers close together (a tap and a

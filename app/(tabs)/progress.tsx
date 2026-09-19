@@ -11,6 +11,7 @@ import {
   weeklyCompletion,
 } from "../../lib/progress";
 import { useStore } from "../../lib/store";
+import { formatFreeDays } from "../../lib/templates";
 import { colors, spacing, typography } from "../../lib/theme";
 import type { Habit } from "../../lib/types";
 
@@ -85,7 +86,7 @@ function HabitProgressCard({ habit }: { habit: Habit }) {
     return (
       <Card>
         <Text style={styles.habitName}>{habit.name}</Text>
-        <Text style={styles.cardBody}>{smokeFreeDays} smoke-free days</Text>
+        <Text style={styles.cardBody}>{formatFreeDays(smokeFreeDays, habit.templateId)}</Text>
         <Text style={styles.cardCaption}>{formatMoney(savings)} estimated savings</Text>
       </Card>
     );

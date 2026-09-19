@@ -5,11 +5,13 @@ import { upsertLoggedAmount } from "../lib/logWrites";
 import { monthRangeFor } from "../lib/monthRange";
 import { sumLedger, type LedgerRow } from "../lib/savingsLedger";
 import {
-  deleteLedgerForHabit,
+  deleteSavingsDataForHabit,
+  ensureTermsHistory,
   loadLedgerRows,
+  loadTermsHistory,
   migrateAmountLoggedColumn,
-  SET_BASELINE_SQL,
   syncSavingsLedger,
+  updateHabitTerms,
 } from "../lib/savingsLedgerDb";
 import type { DailyLog, Habit } from "../lib/types";
 import { quitHabit, localNoon } from "./helpers/fixtures";
@@ -19,6 +21,7 @@ import { insertHabit, openTestDb, type TestDb } from "./helpers/testDb";
 // real table definitions.
 
 const SEPTEMBER = { start: "2026-09-01", end: "2026-09-30" };
+const NEW = { baselineQuantity: 5, pricePerItem: 30 };
 
 function legacyLog(db: TestDb, date: string, amount: number, extras: { reflection?: string; microtasks?: string } = {}) {
   db.raw
@@ -248,7 +251,7 @@ describe("syncSavingsLedger", () => {
     await upsertLoggedAmount(db, { id: "a", habitId: "smoke", date: "2026-09-10", amount: 1 });
     await syncSavingsLedger(db, { today: "2026-09-19" });
 
-    db.raw.prepare("UPDATE habits SET pricePerItem = 30 WHERE id = 'smoke'").run();
+    await updateHabitTerms(db, "smoke", { baselineQuantity: 4, pricePerItem: 30 }, "from_today", { today: "2026-09-19" });
     await upsertLoggedAmount(db, { id: "b", habitId: "smoke", date: "2026-09-19", amount: 1 });
     await syncSavingsLedger(db, { today: "2026-09-19" });
 
@@ -294,8 +297,225 @@ describe("syncSavingsLedger", () => {
     await upsertLoggedAmount(db, { id: "a", habitId: "smoke", date: "2026-09-10", amount: 1 });
     await syncSavingsLedger(db, { today: "2026-09-19" });
     assert.equal((await loadLedgerRows(db)).length, 1);
-    await deleteLedgerForHabit(db, "smoke");
+    await deleteSavingsDataForHabit(db, "smoke");
     assert.equal((await loadLedgerRows(db)).length, 0);
+  });
+});
+
+describe("changing baseline and price", () => {
+  // 4 x Rs 25 to begin with. 10 Sep: had 1 (saved 75). 11 Sep: had 0 (saved 100). Today, 19 Sep: had 1.
+  async function seeded(): Promise<TestDb> {
+    const db = await freshDb();
+    await upsertLoggedAmount(db, { id: "a", habitId: "smoke", date: "2026-09-10", amount: 1 });
+    await upsertLoggedAmount(db, { id: "b", habitId: "smoke", date: "2026-09-11", amount: 0 });
+    await upsertLoggedAmount(db, { id: "c", habitId: "smoke", date: "2026-09-19", amount: 1 });
+    await syncSavingsLedger(db, { today: "2026-09-19", nowISO: "2026-09-19T08:00:00.000Z" });
+    return db;
+  }
+  const NEW_TERMS = { baselineQuantity: 5, pricePerItem: 30 };
+  const byDate = (rows: LedgerRow[], date: string) => rows.find((row) => row.date === date);
+
+  test("'from today on': finished days keep their old values, today and later use the new ones", async () => {
+    const db = await seeded();
+    const before = await loadLedgerRows(db);
+
+    const saved = await updateHabitTerms(db, "smoke", NEW_TERMS, "from_today", { today: "2026-09-19", nowISO: "2026-09-19T09:00:00.000Z" });
+    assert.equal(saved, true);
+    const rows = await loadLedgerRows(db);
+
+    for (const date of ["2026-09-10", "2026-09-11"]) {
+      assert.deepEqual(byDate(rows, date), byDate(before, date), `${date} is finished and must not change at all`);
+    }
+    // Today is still provisional, so it follows the new terms.
+    const today = byDate(rows, "2026-09-19")!;
+    assert.equal(today.baselineQuantity, 5);
+    assert.equal(today.unitPriceMinor, 3000);
+    assert.equal(today.savedMinor, 12000); // 5 x 30 - 1 x 30
+    assert.equal(today.finalizedAt, null);
+
+    // A day logged after the change is measured with the new terms too.
+    await upsertLoggedAmount(db, { id: "d", habitId: "smoke", date: "2026-09-20", amount: 2 });
+    await syncSavingsLedger(db, { today: "2026-09-20", nowISO: "2026-09-20T09:00:00.000Z" });
+    const later = byDate(await loadLedgerRows(db), "2026-09-20")!;
+    assert.equal(later.savedMinor, 9000); // 5 x 30 - 2 x 30
+    // ...and yesterday, now over, is final with the new terms it had.
+    assert.equal(byDate(await loadLedgerRows(db), "2026-09-19")!.finalizedAt, "2026-09-20T09:00:00.000Z");
+  });
+
+  test("'correct all days': every logged day is recalculated and stays final", async () => {
+    const db = await seeded();
+    const saved = await updateHabitTerms(db, "smoke", NEW_TERMS, "all_days", { today: "2026-09-19", nowISO: "2026-09-19T09:00:00.000Z" });
+    assert.equal(saved, true);
+    const rows = await loadLedgerRows(db);
+
+    assert.equal(rows.length, 3, "same days, no duplicates");
+    assert.equal(byDate(rows, "2026-09-10")!.savedMinor, 12000); // 5 x 30 - 1 x 30
+    assert.equal(byDate(rows, "2026-09-11")!.savedMinor, 15000); // 5 x 30
+    assert.equal(byDate(rows, "2026-09-19")!.savedMinor, 12000);
+    for (const row of rows) {
+      assert.equal(row.baselineQuantity, 5);
+      assert.equal(row.unitPriceMinor, 3000);
+    }
+    assert.equal(byDate(rows, "2026-09-10")!.finalizedAt, "2026-09-19T09:00:00.000Z", "finished days are final again");
+    assert.equal(byDate(rows, "2026-09-19")!.finalizedAt, null, "today is still provisional");
+    assert.equal(sumLedger(rows, SEPTEMBER).savedMinor, 12000 + 15000);
+  });
+
+  test("the habit itself is updated", async () => {
+    const db = await seeded();
+    await updateHabitTerms(db, "smoke", NEW_TERMS, "from_today", { today: "2026-09-19" });
+    const habit = db.raw.prepare("SELECT baselineQuantity, pricePerItem FROM habits WHERE id = 'smoke'").get() as {
+      baselineQuantity: number;
+      pricePerItem: number;
+    };
+    assert.deepEqual({ ...habit }, { baselineQuantity: 5, pricePerItem: 30 });
+  });
+
+  test("applying the same change again changes nothing", async () => {
+    const db = await seeded();
+    await updateHabitTerms(db, "smoke", NEW_TERMS, "all_days", { today: "2026-09-19", nowISO: "2026-09-19T09:00:00.000Z" });
+    const once = await loadLedgerRows(db);
+    await updateHabitTerms(db, "smoke", NEW_TERMS, "all_days", { today: "2026-09-19", nowISO: "2026-09-19T09:00:00.000Z" });
+    assert.deepEqual(await loadLedgerRows(db), once);
+    await updateHabitTerms(db, "smoke", NEW_TERMS, "from_today", { today: "2026-09-19", nowISO: "2026-09-19T10:00:00.000Z" });
+    assert.deepEqual(await loadLedgerRows(db), once);
+  });
+
+  test("a free item (price 0) is allowed", async () => {
+    const db = await seeded();
+    assert.equal(await updateHabitTerms(db, "smoke", { baselineQuantity: 4, pricePerItem: 0 }, "all_days", { today: "2026-09-19" }), true);
+    assert.ok((await loadLedgerRows(db)).every((row) => row.savedMinor === 0 && row.baselineCostMinor === 0));
+  });
+
+  test("unusable values change nothing", async () => {
+    const db = await seeded();
+    const rowsBefore = await loadLedgerRows(db);
+    const habitBefore = db.raw.prepare("SELECT baselineQuantity, pricePerItem FROM habits WHERE id = 'smoke'").get();
+    for (const terms of [
+      { baselineQuantity: 0, pricePerItem: 25 },
+      { baselineQuantity: -2, pricePerItem: 25 },
+      { baselineQuantity: Number.NaN, pricePerItem: 25 },
+      { baselineQuantity: 4, pricePerItem: -1 },
+      { baselineQuantity: 4, pricePerItem: Number.POSITIVE_INFINITY },
+    ]) {
+      assert.equal(await updateHabitTerms(db, "smoke", terms, "all_days", { today: "2026-09-19" }), false);
+    }
+    assert.deepEqual(await loadLedgerRows(db), rowsBefore);
+    assert.deepEqual(db.raw.prepare("SELECT baselineQuantity, pricePerItem FROM habits WHERE id = 'smoke'").get(), habitBefore);
+  });
+
+  test("only a cost-tracked quit habit can be changed", async () => {
+    const db = await seeded();
+    insertHabit(db, { id: "med", kind: "good", hasCost: true, baselineQuantity: null, pricePerItem: 30 });
+    insertHabit(db, { id: "free", kind: "quit", hasCost: false, baselineQuantity: 60, pricePerItem: null });
+    assert.equal(await updateHabitTerms(db, "med", { baselineQuantity: 3, pricePerItem: 10 }, "all_days", { today: "2026-09-19" }), false);
+    assert.equal(await updateHabitTerms(db, "free", { baselineQuantity: 3, pricePerItem: 10 }, "all_days", { today: "2026-09-19" }), false);
+    assert.equal(await updateHabitTerms(db, "no-such-habit", NEW_TERMS, "all_days", { today: "2026-09-19" }), false);
+    const med = db.raw.prepare("SELECT baselineQuantity, pricePerItem FROM habits WHERE id = 'med'").get() as { baselineQuantity: null; pricePerItem: number };
+    assert.deepEqual({ ...med }, { baselineQuantity: null, pricePerItem: 30 });
+  });
+
+  test("a change to one habit never touches another habit's records", async () => {
+    const db = await seeded();
+    insertHabit(db, { id: "chew", name: "Chewing", baselineQuantity: 4, pricePerItem: 45 });
+    db.raw.prepare("INSERT INTO daily_logs (id, habitId, date, amount, microtasksDone, amountLogged) VALUES ('x','chew','2026-09-18',2,'[]',1)").run();
+    await syncSavingsLedger(db, { today: "2026-09-19" });
+    const chewBefore = (await loadLedgerRows(db)).filter((row) => row.habitId === "chew");
+    assert.equal(chewBefore.length, 1);
+
+    await updateHabitTerms(db, "smoke", NEW_TERMS, "all_days", { today: "2026-09-19" });
+    assert.deepEqual((await loadLedgerRows(db)).filter((row) => row.habitId === "chew"), chewBefore);
+  });
+});
+
+describe("price and baseline history", () => {
+  const at = (rows: LedgerRow[], date: string) => rows.find((row) => row.date === date)!;
+
+  test("habits from before the history existed get one entry: what they have now, from the day they were created", async () => {
+    const db = openTestDb();
+    insertHabit(db, { id: "smoke", baselineQuantity: 5, pricePerItem: 25, createdAt: localNoon("2026-09-17") });
+    insertHabit(db, { id: "free", kind: "quit", hasCost: false, baselineQuantity: 60, pricePerItem: null });
+
+    await ensureTermsHistory(db);
+    assert.deepEqual(await loadTermsHistory(db), {
+      smoke: [{ effectiveFrom: "2026-09-17", baselineQuantity: 5, pricePerItem: 25 }],
+    });
+    await ensureTermsHistory(db); // repeating adds nothing
+    assert.equal((await loadTermsHistory(db)).smoke.length, 1);
+  });
+
+  test("a price rise applies only from the day it was made, on every later rebuild too", async () => {
+    const db = await freshDb(); // 4 x Rs 25, created 1 Aug
+    await upsertLoggedAmount(db, { id: "a", habitId: "smoke", date: "2026-09-10", amount: 1 });
+    await upsertLoggedAmount(db, { id: "b", habitId: "smoke", date: "2026-09-14", amount: 2 });
+    await syncSavingsLedger(db, { today: "2026-09-15", nowISO: "2026-09-15T08:00:00.000Z" });
+
+    // On the 15th the price goes from Rs 25 to Rs 30.
+    await updateHabitTerms(db, "smoke", { baselineQuantity: 4, pricePerItem: 30 }, "from_today", { today: "2026-09-15" });
+    await upsertLoggedAmount(db, { id: "c", habitId: "smoke", date: "2026-09-16", amount: 2 });
+    await syncSavingsLedger(db, { today: "2026-09-17", nowISO: "2026-09-17T08:00:00.000Z" });
+
+    let rows = await loadLedgerRows(db);
+    assert.equal(at(rows, "2026-09-10").unitPriceMinor, 2500);
+    assert.equal(at(rows, "2026-09-14").unitPriceMinor, 2500);
+    assert.equal(at(rows, "2026-09-16").unitPriceMinor, 3000);
+    assert.equal(at(rows, "2026-09-14").savedMinor, 5000); // (4 - 2) x 25
+    assert.equal(at(rows, "2026-09-16").savedMinor, 6000); // (4 - 2) x 30
+
+    // The history alone is enough to reproduce every day: wipe the ledger and rebuild it.
+    const before = rows.map((row) => [row.date, row.unitPriceMinor, row.savedMinor]);
+    db.raw.exec("DELETE FROM daily_savings");
+    await syncSavingsLedger(db, { today: "2026-09-17", nowISO: "2026-09-17T09:00:00.000Z" });
+    rows = await loadLedgerRows(db);
+    assert.deepEqual(rows.map((row) => [row.date, row.unitPriceMinor, row.savedMinor]).sort(), before.sort());
+  });
+
+  test("changing the price before the first sync still keeps the old price for earlier days", async () => {
+    // No history and no ledger yet - the change itself must record the price being replaced.
+    const db = await freshDb();
+    await upsertLoggedAmount(db, { id: "a", habitId: "smoke", date: "2026-09-10", amount: 1 });
+    await updateHabitTerms(db, "smoke", { baselineQuantity: 4, pricePerItem: 30 }, "from_today", { today: "2026-09-15" });
+    await syncSavingsLedger(db, { today: "2026-09-17" });
+    assert.equal(at(await loadLedgerRows(db), "2026-09-10").unitPriceMinor, 2500);
+    assert.equal(at(await loadLedgerRows(db), "2026-09-10").savedMinor, 7500);
+  });
+
+  test("two changes on the same day keep only the later one for that day", async () => {
+    const db = await freshDb();
+    await updateHabitTerms(db, "smoke", { baselineQuantity: 4, pricePerItem: 30 }, "from_today", { today: "2026-09-15" });
+    await updateHabitTerms(db, "smoke", { baselineQuantity: 4, pricePerItem: 32 }, "from_today", { today: "2026-09-15" });
+    const history = (await loadTermsHistory(db)).smoke;
+    assert.deepEqual(history.map((e) => [e.effectiveFrom, e.pricePerItem]), [
+      ["2026-08-01", 25],
+      ["2026-09-15", 32],
+    ]);
+  });
+
+  test("'correct all days' replaces the history with one entry from the day it was created", async () => {
+    const db = await freshDb();
+    await updateHabitTerms(db, "smoke", { baselineQuantity: 4, pricePerItem: 30 }, "from_today", { today: "2026-09-15" });
+    await updateHabitTerms(db, "smoke", { baselineQuantity: 5, pricePerItem: 20 }, "all_days", { today: "2026-09-16" });
+    assert.deepEqual((await loadTermsHistory(db)).smoke, [{ effectiveFrom: "2026-08-01", baselineQuantity: 5, pricePerItem: 20 }]);
+  });
+
+  test("a baseline change moves the targets from then on and leaves finished days alone", async () => {
+    const db = await freshDb();
+    await upsertLoggedAmount(db, { id: "a", habitId: "smoke", date: "2026-09-10", amount: 3 });
+    await syncSavingsLedger(db, { today: "2026-09-12" });
+    await updateHabitTerms(db, "smoke", { baselineQuantity: 8, pricePerItem: 25 }, "from_today", { today: "2026-09-12" });
+    const rows = await loadLedgerRows(db);
+    assert.equal(at(rows, "2026-09-10").baselineQuantity, 4, "the 10th was measured against 4 and stays that way");
+    assert.equal(at(rows, "2026-09-10").savedMinor, 2500);
+    const history = (await loadTermsHistory(db)).smoke;
+    assert.equal(history[history.length - 1].baselineQuantity, 8);
+  });
+
+  test("deleting a habit removes its history", async () => {
+    const db = await freshDb();
+    await updateHabitTerms(db, "smoke", NEW, "from_today", { today: "2026-09-15" });
+    assert.equal((await loadTermsHistory(db)).smoke.length, 2);
+    await deleteSavingsDataForHabit(db, "smoke");
+    assert.deepEqual(await loadTermsHistory(db), {});
   });
 });
 
@@ -327,19 +547,13 @@ describe("legacy habits", () => {
     assert.deepEqual(before.habitsNeedingBaseline, [{ habitId: "smoke", name: "Smoking cigarettes" }]);
     assert.equal(before.potentialSavingsRemainingToday, 0);
 
-    // The person enters their starting amount (the store runs SET_BASELINE_SQL).
-    db.raw.prepare(SET_BASELINE_SQL).run(5, "smoke");
-    await syncSavingsLedger(db, { today: "2026-09-19" });
+    // The person enters their starting amount on the "Baseline and price" screen.
+    assert.equal(await updateHabitTerms(db, "smoke", { baselineQuantity: 5, pricePerItem: 25 }, "all_days", { today: "2026-09-19" }), true);
     const rows = await loadLedgerRows(db);
     assert.deepEqual(rows.map((row) => [row.date, row.baselineQuantity, row.savedMinor]).sort(), [
       ["2026-09-10", 5, 7500],
       ["2026-09-19", 5, 10000],
     ]);
-
-    // A baseline that exists is the original setup value and cannot be overwritten this way.
-    db.raw.prepare(SET_BASELINE_SQL).run(99, "smoke");
-    const stored = db.raw.prepare("SELECT baselineQuantity FROM habits WHERE id = 'smoke'").get() as { baselineQuantity: number };
-    assert.equal(stored.baselineQuantity, 5);
   });
 
   test("month totals come from the ledger for the chosen calendar", async () => {

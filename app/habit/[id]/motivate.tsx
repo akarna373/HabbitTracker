@@ -18,7 +18,7 @@ import {
 } from "../../../lib/progress";
 import { selectLogForDate, useStore } from "../../../lib/store";
 import { colors, spacing, typography } from "../../../lib/theme";
-import { getQuitCopy } from "../../../lib/templates";
+import { formatFreeDays, getQuitCopy } from "../../../lib/templates";
 
 export default function MotivateScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,7 +30,7 @@ export default function MotivateScreen() {
 
   if (!habit) return null;
 
-  const { daysLabel, motivateSubtitle } = getQuitCopy(habit.templateId);
+  const { motivateSubtitle } = getQuitCopy(habit.templateId);
 
   const today = todayISO();
   const amount = selectLogForDate(logs, today)?.amount ?? 0;
@@ -69,7 +69,7 @@ export default function MotivateScreen() {
 
         <Card>
           <Text style={styles.cardTitle}>This week</Text>
-          <Text style={styles.cardBody}>{smokeFreeDays} {daysLabel}</Text>
+          <Text style={styles.cardBody}>{formatFreeDays(smokeFreeDays, habit.templateId)}</Text>
           <Text style={styles.cardCaption}>{formatMoney(savings)} estimated savings</Text>
         </Card>
 

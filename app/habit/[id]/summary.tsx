@@ -17,7 +17,7 @@ import {
 } from "../../../lib/progress";
 import { selectLogForDate, useStore } from "../../../lib/store";
 import { colors, spacing, typography } from "../../../lib/theme";
-import { getQuitCopy } from "../../../lib/templates";
+import { formatFreeDays, getQuitCopy } from "../../../lib/templates";
 
 export default function SmokingSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,7 +26,7 @@ export default function SmokingSummaryScreen() {
 
   if (!habit) return null;
 
-  const { verb, daysLabel } = getQuitCopy(habit.templateId);
+  const { verb } = getQuitCopy(habit.templateId);
   const today = todayISO();
   const yesterday = addDays(today, -1);
   const todayAmount = selectLogForDate(logs, today)?.amount ?? 0;
@@ -80,7 +80,7 @@ export default function SmokingSummaryScreen() {
 
         <Card>
           <Text style={styles.cardTitle}>This week</Text>
-          <Text style={styles.cardBody}>{smokeFreeDays} {daysLabel}</Text>
+          <Text style={styles.cardBody}>{formatFreeDays(smokeFreeDays, habit.templateId)}</Text>
           <Text style={styles.cardCaption}>{formatMoney(savings)} estimated savings</Text>
         </Card>
 

@@ -6,6 +6,14 @@ export type FrequencyType = "daily" | "weekdays" | "weekly" | "custom";
 
 export type GoalType = "reduce" | "quit_completely" | "track_only";
 
+// One stretch of a cost-tracked habit's baseline and price: it starts on `effectiveFrom`
+// (a local "YYYY-MM-DD") and holds until the next entry. See lib/termsHistory.ts.
+export interface TermsEntry {
+  effectiveFrom: string;
+  baselineQuantity: number | null;
+  pricePerItem: number | null;
+}
+
 export interface Habit {
   id: string;
   kind: HabitKind;
@@ -49,6 +57,10 @@ export interface Habit {
   pillColor: string | null; // Medication: hex color for the packet visual - null defaults to theme pink
   createdAt: string;
   archivedAt: string | null;
+  // Every baseline and price this habit has had, each from the date it began. baselineQuantity and
+  // pricePerItem above are the values in force today; money maths for a past day reads this instead.
+  // Absent means "just the values above".
+  termsHistory?: TermsEntry[];
 }
 
 export interface FinancialSettings {

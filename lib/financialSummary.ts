@@ -5,7 +5,7 @@ import { monthRangeFor } from "./monthRange";
 import {
   computeAmounts,
   fromMinor,
-  getSavingsTerms,
+  getSavingsTermsOn,
   isUsableLog,
   localDateOf,
   needsBaseline,
@@ -130,7 +130,8 @@ export function computeFinancialSummary(input: FinancialSummaryInput): Financial
       habitsNeedingBaseline.push({ habitId: habit.id, name: habit.name });
       continue;
     }
-    const terms = getSavingsTerms(habit);
+    // Today is measured with the terms in force today.
+    const terms = getSavingsTermsOn(habit, today);
     if (!terms) continue;
 
     const created = localDateOf(habit.createdAt);

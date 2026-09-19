@@ -65,6 +65,7 @@ export function SummaryDashboardCard() {
 
   const accessibilityLabel = hasSufficientData
     ? `Today's Summary. Potential savings remaining today ${formatMoneyFull(summary.potentialSavingsRemainingToday)}. ` +
+      `Spent today ${formatMoneyFull(summary.spentToday)}. ` +
       `Saved this month ${formatMoneyFull(summary.savedThisMonth)}. ` +
       `Spent this month ${formatMoneyFull(summary.spentThisMonth)}.${goalSpoken}`
     : `Today's Summary. ${emptyMessage}`;
@@ -104,9 +105,21 @@ export function SummaryDashboardCard() {
           {hasSufficientData ? (
             <>
               <Text style={styles.primaryLabel}>Potential savings remaining today</Text>
-              <Text style={styles.primaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-                {formatMoneyCompact(summary.potentialSavingsRemainingToday)}
-              </Text>
+              {/* Today's spending sits to the right of the big figure, in space that was empty, so the
+                  card does not get any taller. */}
+              <View style={styles.primaryRow}>
+                <Text style={styles.primaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {formatMoneyCompact(summary.potentialSavingsRemainingToday)}
+                </Text>
+                <View style={styles.todaySpend}>
+                  <Text style={styles.todaySpendLabel} numberOfLines={1}>
+                    Spent today
+                  </Text>
+                  <Text style={styles.todaySpendValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                    {formatMoneyCompact(summary.spentToday)}
+                  </Text>
+                </View>
+              </View>
 
               <View style={styles.divider} />
 
@@ -204,7 +217,11 @@ const styles = StyleSheet.create({
   detailsHint: { flexDirection: "row", alignItems: "center", gap: 2, marginLeft: spacing.sm },
   detailsText: { color: colors.accentPink, fontSize: 13, fontWeight: "700" },
   primaryLabel: { color: palette.textDim, fontSize: 13, fontWeight: "600", letterSpacing: 0.3, ...palette.textShadow },
-  primaryValue: { color: palette.text, fontSize: 34, fontWeight: "800", ...palette.textShadow },
+  primaryRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
+  primaryValue: { flexShrink: 1, color: palette.text, fontSize: 34, fontWeight: "800", ...palette.textShadow },
+  todaySpend: { alignItems: "flex-end", flexShrink: 0, maxWidth: "42%", paddingBottom: 4 },
+  todaySpendLabel: { color: palette.textDim, fontSize: 12, fontWeight: "600", ...palette.textShadow },
+  todaySpendValue: { color: palette.spent, fontSize: 18, fontWeight: "800", ...palette.textShadow },
   divider: { height: 1, backgroundColor: palette.divider, marginVertical: 6 },
   metricsRow: { flexDirection: "row", gap: spacing.md },
   // minWidth: 0 lets a long value shrink (adjustsFontSizeToFit) instead of

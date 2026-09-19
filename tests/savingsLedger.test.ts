@@ -276,6 +276,36 @@ describe("planLedgerSync", () => {
     assert.equal(rows.length, 0);
   });
 
+  test("the phone's date stepping back does not delete a real day's record", () => {
+    // 00:05 in Nepal on the 20th: both days have a log, the 19th is final, the 20th provisional.
+    const logs = [log("2026-09-19", 5), log("2026-09-20", 1)];
+    const rows = applyLedgerPlan([], plan(logs, [], "2026-09-20", "2026-09-19T18:20:00.000Z"));
+    assert.deepEqual(rows.map((row) => [row.date, row.finalizedAt !== null]).sort(), [
+      ["2026-09-19", true],
+      ["2026-09-20", false],
+    ]);
+
+    // The phone hops to India time: the same moment reads 23:50 on the 19th.
+    const stepBack = plan(logs, rows, "2026-09-19", "2026-09-19T18:21:00.000Z");
+    assert.deepEqual(stepBack, { upserts: [], deletes: [] }, "nothing is deleted or rewritten");
+    assert.deepEqual(applyLedgerPlan(rows, stepBack), rows);
+
+    // Back on Nepal time everything is still exactly as it was.
+    const back = plan(logs, rows, "2026-09-20", "2026-09-19T18:40:00.000Z");
+    assert.deepEqual(back, { upserts: [], deletes: [] });
+  });
+
+  test("a day after today that has no record yet is still not created", () => {
+    const rows = applyLedgerPlan([], plan([log("2026-09-20", 1)], [], "2026-09-19"));
+    assert.equal(rows.length, 0);
+  });
+
+  test("a deleted log still removes its record, even when the phone's date is behind", () => {
+    const rows = applyLedgerPlan([], plan([log("2026-09-19", 1), log("2026-09-20", 1)], [], "2026-09-20"));
+    const after = plan([log("2026-09-19", 1)], rows, "2026-09-19");
+    assert.deepEqual(after.deletes.map((d) => d.date), ["2026-09-20"], "no log at all for the 20th: the record goes");
+  });
+
   test("unscheduled days do not earn", () => {
     const mondayOnly = quitHabit({ repeatDays: [0] });
     // 2026-09-14 is a Monday, 2026-09-15 a Tuesday.

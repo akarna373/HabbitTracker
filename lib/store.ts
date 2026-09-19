@@ -26,9 +26,17 @@ import { parseDosageFrequency } from "./medicationParse";
 import { getSwipeSettings, saveSwipeSettings, type SwipeSettings } from "./swipeSettings";
 import { getCalendarType, saveCalendarType, type CalendarType } from "./calendarSettings";
 import { upsertLoggedAmount } from "./logWrites";
-import { deleteLedgerForHabit, loadLedgerRows, SET_BASELINE_SQL, syncSavingsLedger } from "./savingsLedgerDb";
+import {
+  deleteSavingsDataForHabit,
+  ensureTermsHistory,
+  loadLedgerRows,
+  loadTermsHistory,
+  syncSavingsLedger,
+  updateHabitTerms as updateHabitTermsInDb,
+  type TermsChangeScope,
+} from "./savingsLedgerDb";
 import type { LedgerRow } from "./savingsLedger";
-import type { DailyLog, FinancialSettings, GoalType, Habit, Microtask, NewHabitDraft, SmokeLocation } from "./types";
+import type { DailyLog, FinancialSettings, GoalType, Habit, Microtask, NewHabitDraft, SmokeLocation, TermsEntry } from "./types";
 
 interface HabitRow {
   id: string;
@@ -75,7 +83,9 @@ interface HabitRow {
   archivedAt: string | null;
 }
 
-function rowToHabit(row: HabitRow): Habit {
+// `history` is the habit's baseline/price history (lib/termsHistory.ts); without it the habit just
+// uses the values on its row.
+function rowToHabit(row: HabitRow, history?: TermsEntry[]): Habit {
   return {
     ...row,
     kind: row.kind as Habit["kind"],
@@ -88,6 +98,7 @@ function rowToHabit(row: HabitRow): Habit {
     locationTrackingEnabled: !!row.locationTrackingEnabled,
     backgroundLocationEnabled: !!row.backgroundLocationEnabled,
     medicationNotificationIds: row.medicationNotificationIds ? JSON.parse(row.medicationNotificationIds) : null,
+    ...(history && history.length > 0 ? { termsHistory: history } : {}),
   };
 }
 
@@ -134,8 +145,14 @@ interface StoreState {
   // Re-reads habits and logs from the database (a notification action may have written
   // while the app was in the background), then syncs the ledger.
   resume: () => Promise<void>;
-  // For a cost-tracked quit habit whose original baseline was never stored.
-  setBaseline: (habitId: string, quantity: number) => Promise<void>;
+  // Changes a cost-tracked quit habit's baseline and price (also how a habit that never had a
+  // baseline gets one). The scope says whether finished days keep their old values or are
+  // recalculated. Returns whether anything was saved.
+  updateHabitTerms: (
+    habitId: string,
+    terms: { baselineQuantity: number; pricePerItem: number },
+    scope: TermsChangeScope
+  ) => Promise<boolean>;
   init: () => Promise<void>;
   createHabit: (draft: NewHabitDraft) => Promise<string>;
   deleteHabit: (habitId: string) => Promise<void>;
@@ -236,15 +253,24 @@ export const useStore = create<StoreState>((set, get) => ({
     const db = await getDb();
     const swipeSettings = await getSwipeSettings();
     const calendarType = await getCalendarType();
+    // Every cost-tracked habit gets its price/baseline history before habits are read. A failure
+    // here must not stop the app opening: habits then simply use the values on their row.
+    let historyByHabit: Record<string, TermsEntry[]> = {};
+    try {
+      await ensureTermsHistory(db);
+      historyByHabit = await loadTermsHistory(db);
+    } catch {
+      // continue without a history
+    }
     const habitRows = await db.getAllAsync<HabitRow>(
       "SELECT * FROM habits WHERE archivedAt IS NULL ORDER BY createdAt ASC"
     );
-    const habits = habitRows.map(rowToHabit);
+    const habits = habitRows.map((row) => rowToHabit(row, historyByHabit[row.id]));
 
     const archivedRows = await db.getAllAsync<HabitRow>(
       "SELECT * FROM habits WHERE archivedAt IS NOT NULL ORDER BY archivedAt DESC"
     );
-    const archivedHabits = archivedRows.map(rowToHabit);
+    const archivedHabits = archivedRows.map((row) => rowToHabit(row, historyByHabit[row.id]));
 
     const microtaskRows = await db.getAllAsync<Microtask>(
       "SELECT * FROM microtasks ORDER BY sortOrder ASC"
@@ -334,7 +360,12 @@ export const useStore = create<StoreState>((set, get) => ({
       const logRows = await db.getAllAsync<LogRow>("SELECT * FROM daily_logs");
       const logsByHabit: Record<string, DailyLog[]> = {};
       for (const row of logRows) (logsByHabit[row.habitId] ??= []).push(rowToLog(row));
-      set({ habits: habitRows.map(rowToHabit), archivedHabits: archivedRows.map(rowToHabit), logsByHabit });
+      const historyByHabit = await loadTermsHistory(db);
+      set({
+        habits: habitRows.map((row) => rowToHabit(row, historyByHabit[row.id])),
+        archivedHabits: archivedRows.map((row) => rowToHabit(row, historyByHabit[row.id])),
+        logsByHabit,
+      });
       await syncSavingsLedger(db);
       set({ savingsLedger: await loadLedgerRows(db) });
     } catch {
@@ -342,19 +373,21 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  // Only fills a baseline that was never stored. A baseline that already exists is the
-  // original setup value and is not overwritten here. The new value applies to the
-  // habit's logged days, so the ledger is rebuilt right after.
-  setBaseline: async (habitId, quantity) => {
-    if (!Number.isFinite(quantity) || quantity <= 0) return;
+  updateHabitTerms: async (habitId, terms, scope) => {
     const db = await getDb();
-    await db.runAsync(SET_BASELINE_SQL, [quantity, habitId]);
+    const changed = await updateHabitTermsInDb(db, habitId, terms, scope);
+    if (!changed) return false;
+    const history = (await loadTermsHistory(db, habitId))[habitId];
     set((s) => ({
       habits: s.habits.map((h) =>
-        h.id === habitId && (h.baselineQuantity === null || h.baselineQuantity <= 0) ? { ...h, baselineQuantity: quantity } : h
+        h.id === habitId
+          ? { ...h, baselineQuantity: terms.baselineQuantity, pricePerItem: terms.pricePerItem, termsHistory: history }
+          : h
       ),
     }));
-    await get().syncSavings();
+    // The ledger was rebuilt in the database; show what is there now.
+    set({ savingsLedger: await loadLedgerRows(db) });
+    return true;
   },
 
   createHabit: async (draft) => {
@@ -529,7 +562,7 @@ export const useStore = create<StoreState>((set, get) => ({
     await db.runAsync("DELETE FROM microtasks WHERE habitId = ?", [habitId]);
     await db.runAsync("DELETE FROM daily_logs WHERE habitId = ?", [habitId]);
     await db.runAsync("DELETE FROM smoke_locations WHERE habitId = ?", [habitId]);
-    await deleteLedgerForHabit(db, habitId);
+    await deleteSavingsDataForHabit(db, habitId);
 
     set((s) => {
       const { [habitId]: _m, ...restMicrotasks } = s.microtasksByHabit;
@@ -592,8 +625,9 @@ export const useStore = create<StoreState>((set, get) => ({
     const db = await getDb();
     const habitRow = await db.getFirstAsync<HabitRow>("SELECT * FROM habits WHERE id = ?", [habitId]);
     const logRows = await db.getAllAsync<LogRow>("SELECT * FROM daily_logs WHERE habitId = ?", [habitId]);
+    const history = (await loadTermsHistory(db, habitId))[habitId];
     set((s) => ({
-      habits: habitRow && !habitRow.archivedAt ? s.habits.map((h) => (h.id === habitId ? rowToHabit(habitRow) : h)) : s.habits,
+      habits: habitRow && !habitRow.archivedAt ? s.habits.map((h) => (h.id === habitId ? rowToHabit(habitRow, history) : h)) : s.habits,
       logsByHabit: { ...s.logsByHabit, [habitId]: logRows.map(rowToLog) },
     }));
     // A notification action changed this habit's count: bring the ledger along too.
