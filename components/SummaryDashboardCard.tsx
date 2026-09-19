@@ -7,11 +7,10 @@ import { formatMoneyCompact, formatMoneyFull } from "../lib/currency";
 import { computeGoalProgress } from "../lib/financialSummary";
 import { useFinancialSummary } from "../lib/financialSummarySelectors";
 import { useStore } from "../lib/store";
-import { SUMMARY_CARD_RADIUS, summaryColors as palette } from "../lib/summaryTheme";
+import { summaryColors as palette } from "../lib/summaryTheme";
 import { colors, spacing } from "../lib/theme";
 import { useReducedMotion } from "../lib/useReducedMotion";
 import { GoalProgressBar } from "./GoalProgressBar";
-import { SummaryBackground } from "./SummaryBackground";
 
 const EMPTY_MESSAGE = "Add cost details to a habit to discover how much you are saving.";
 
@@ -60,12 +59,12 @@ export function SummaryDashboardCard() {
     : `Today's Summary. ${EMPTY_MESSAGE}`;
 
   return (
-    // Layers, bottom to top: background (scene + dark layer), a full-card Pressable (so
-    // every visible pixel, edges included, opens the summary), then the content.
-    // The content ignores touches except the goal button, so a tap on any text
-    // falls through to the Pressable underneath.
+    // Only the content of the money card: the frame and the scene behind it belong to
+    // Today's swiper (TodayCarousel), so they stay put while this slides.
+    // Layers, bottom to top: a full-page Pressable (so every visible pixel opens the
+    // summary), then the content. The content ignores touches except the goal button,
+    // so a tap on any text falls through to the Pressable underneath.
     <Animated.View style={[styles.frame, { transform: [{ scale }] }]}>
-      <SummaryBackground />
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={openSummary}
@@ -151,7 +150,8 @@ export function SummaryDashboardCard() {
                     )}
                     <Text style={styles.goalPercent}>{goal.displayPercent}%</Text>
                   </View>
-                  <Text style={styles.goalAmounts} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {/* Its own full-width line, so a large goal still fits (it shrinks to fit). */}
+                  <Text style={styles.goalAmounts} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                     {formatMoneyCompact(goal.saved)} / {formatMoneyCompact(goal.goal)}
                   </Text>
                   <GoalProgressBar percent={goal.percent} />
@@ -181,44 +181,39 @@ export function SummaryDashboardCard() {
 }
 
 const styles = StyleSheet.create({
-  frame: {
-    width: "100%",
-    // Grows to the height of the tallest card in Today's swiper.
-    flexGrow: 1,
-    borderRadius: SUMMARY_CARD_RADIUS,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,79,139,0.45)",
-    backgroundColor: "#141026",
-  },
-  content: { paddingHorizontal: spacing.md, paddingVertical: 18 },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
+  // Fills its page in Today's swiper, which is as tall as the tallest card. flexGrow, not
+  // flex: 1 - that has a zero basis, so the page would collapse and clip the content.
+  frame: { flexGrow: 1 },
+  // Compact: the whole card has to fit Today's swiper without pushing the tiles below
+  // into the + button. The bottom padding leaves room for the swiper's page dots.
+  content: { paddingHorizontal: spacing.md, paddingTop: 12, paddingBottom: 22 },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
   titleGroup: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
   title: { color: palette.text, fontSize: 16, fontWeight: "700", flexShrink: 1, ...palette.textShadow },
   detailsHint: { flexDirection: "row", alignItems: "center", gap: 2, marginLeft: spacing.sm },
   detailsText: { color: colors.accentPink, fontSize: 13, fontWeight: "700" },
   primaryLabel: { color: palette.textDim, fontSize: 13, fontWeight: "600", letterSpacing: 0.3, ...palette.textShadow },
-  primaryValue: { color: palette.text, fontSize: 38, fontWeight: "800", marginTop: 2, ...palette.textShadow },
-  divider: { height: 1, backgroundColor: palette.divider, marginVertical: spacing.md },
+  primaryValue: { color: palette.text, fontSize: 34, fontWeight: "800", ...palette.textShadow },
+  divider: { height: 1, backgroundColor: palette.divider, marginVertical: 6 },
   metricsRow: { flexDirection: "row", gap: spacing.md },
   // minWidth: 0 lets a long value shrink (adjustsFontSizeToFit) instead of
   // pushing the neighbouring column off the card.
   metric: { flex: 1, minWidth: 0 },
-  metricLabelRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 },
+  metricLabelRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 2 },
   metricLabel: { color: palette.textDim, fontSize: 12, fontWeight: "600", flexShrink: 1, ...palette.textShadow },
-  metricValue: { fontSize: 24, fontWeight: "800", ...palette.textShadow },
-  goalBlock: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: palette.divider },
+  metricValue: { fontSize: 22, fontWeight: "800", ...palette.textShadow },
+  goalBlock: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: palette.divider },
   goalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   goalTitleGroup: { flexDirection: "row", alignItems: "center", gap: 6 },
   goalTitle: { color: palette.textDim, fontSize: 13, fontWeight: "700", ...palette.textShadow },
   goalPercent: { color: palette.text, fontSize: 15, fontWeight: "800", ...palette.textShadow },
-  goalAmounts: { color: palette.text, fontSize: 14, fontWeight: "600", marginTop: 4, marginBottom: 8, ...palette.textShadow },
+  goalAmounts: { color: palette.text, fontSize: 13, fontWeight: "600", marginTop: 2, marginBottom: 6, ...palette.textShadow },
   goalChip: {
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginTop: spacing.md,
+    marginTop: 10,
     minHeight: 36,
     paddingHorizontal: 12,
     borderRadius: 18,

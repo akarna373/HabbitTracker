@@ -2,9 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import type { DayState, ReflectionCardData, ReflectionDay, ReflectionKind, ReflectionRing } from "../lib/reflection";
-import { SUMMARY_CARD_RADIUS, summaryColors as palette } from "../lib/summaryTheme";
+import { summaryColors as palette } from "../lib/summaryTheme";
 import { colors, spacing } from "../lib/theme";
-import { SummaryBackground } from "./SummaryBackground";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -50,17 +49,15 @@ function spoken(card: ReflectionCardData): string {
 }
 
 // A reflection on one kind of habit (or on all of them): a progress ring for today,
-// three figures, and the last seven days as a strip. It sits on the same rotating
-// scene as the Today's Summary card, with the same frame, so the swiper reads as one
-// set. Cards on the swiper are all stretched to the same height by their parent; this
-// one just fills the space.
+// three figures, and the last seven days as a strip. Only the content: the frame and
+// the rotating scene behind it belong to Today's swiper (TodayCarousel) and stay put
+// while this slides. The swiper makes every page as tall as the tallest one; this
+// one just fills its page.
 export function ReflectionCard({ card }: { card: ReflectionCardData }) {
   const accent = ACCENT[card.kind];
 
   return (
     <View style={styles.frame} accessible accessibilityLabel={spoken(card)}>
-      <SummaryBackground />
-
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={[styles.iconCircle, { backgroundColor: hexToRgba(accent, 0.16), borderColor: hexToRgba(accent, 0.4) }]}>
@@ -89,7 +86,7 @@ export function ReflectionCard({ card }: { card: ReflectionCardData }) {
             <Ring ring={card.ring} accent={accent} />
             <View style={styles.stats}>
               {card.stats.map((stat) => (
-                <View key={stat.label}>
+                <View key={stat.label} style={styles.statRow}>
                   <Text style={styles.statLabel} numberOfLines={1}>
                     {stat.label}
                   </Text>
@@ -190,15 +187,8 @@ function DayDot({ state, accent }: { state: DayState; accent: string }) {
 }
 
 const styles = StyleSheet.create({
-  frame: {
-    flexGrow: 1,
-    minHeight: 236,
-    borderRadius: SUMMARY_CARD_RADIUS,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,79,139,0.45)",
-    backgroundColor: "#141026",
-  },
+  // flexGrow, not flex: 1 - that has a zero basis, so the page would collapse and clip.
+  frame: { flexGrow: 1 },
   // The bottom padding leaves room for the swiper's page dots.
   content: { paddingHorizontal: spacing.md, paddingTop: 16, paddingBottom: 26 },
   header: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -222,8 +212,11 @@ const styles = StyleSheet.create({
   ringCenter: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, alignItems: "center", justifyContent: "center", paddingHorizontal: RING_STROKE + 4 },
   ringValue: { color: palette.text, fontSize: 21, fontWeight: "800", ...palette.textShadow },
   ringCaption: { color: palette.textDim, fontSize: 10, textAlign: "center", lineHeight: 12 },
-  stats: { flex: 1, gap: 8, minWidth: 0 },
-  statLabel: { color: palette.textDim, fontSize: 11.5, fontWeight: "600", letterSpacing: 0.2 },
+  // One line per figure (label left, value right), so the three of them are no taller than
+  // the ring and the card stays compact.
+  stats: { flex: 1, gap: 6, minWidth: 0 },
+  statRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  statLabel: { color: palette.textDim, fontSize: 11.5, fontWeight: "600", letterSpacing: 0.2, flexShrink: 1 },
   statValue: { color: palette.text, fontSize: 16, fontWeight: "800", ...palette.textShadow },
   starterText: { color: palette.text, fontSize: 15, lineHeight: 22, marginTop: 14, ...palette.textShadow },
   strip: { flexDirection: "row", justifyContent: "space-between", marginTop: 14, paddingHorizontal: 2 },
