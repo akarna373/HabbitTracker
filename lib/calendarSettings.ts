@@ -29,12 +29,12 @@ export async function saveCalendarType(type: CalendarType): Promise<void> {
   await Storage.setItem(KEY, type);
 }
 
-// Same "weekday, day month year" shape as lib/dates.ts's formatLongDate,
+// Weekday and month first, like lib/dates.ts's formatLongDate ("Saturday, September 19"),
 // but in whichever calendar the user picked in Settings - anywhere a
 // Medication date is shown as a sentence (start date, "until" captions)
 // should read in the region's own calendar, not always Gregorian.
 export function formatLongDateForCalendar(iso: string, calendarType: CalendarType): string {
   if (calendarType !== "bikram_sambat") return formatLongDate(iso);
   const [y, m, d] = iso.split("-").map(Number);
-  return new NepaliDate(new Date(y, m - 1, d)).format("dd, D MMMM YYYY", "np");
+  return new NepaliDate(new Date(y, m - 1, d)).format("ddd, MMMM D, YYYY", "np");
 }

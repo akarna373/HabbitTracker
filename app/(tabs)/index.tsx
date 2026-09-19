@@ -6,16 +6,19 @@ import { ProfileBadge } from "../../components/ProfileBadge";
 import { SpeedDialFab } from "../../components/SpeedDialFab";
 import { SummaryDashboardCard } from "../../components/SummaryDashboardCard";
 import { UpcomingTasksTile } from "../../components/UpcomingTasksTile";
-import { formatLongDate } from "../../lib/dates";
+import { formatLongDateForCalendar } from "../../lib/calendarSettings";
+import { useStore } from "../../lib/store";
 import { useMinuteClock } from "../../lib/useMinuteClock";
 import { brandFont, colors, spacing, typography } from "../../lib/theme";
 
-// Today is a fixed screen - it never scrolls. The summary card takes its natural
-// height; the two tiles below (Habits, Upcoming Tasks) share whatever is left, the
-// second one filling it. The + button floats at the bottom-right corner, as it
-// always has; the Upcoming Tasks tile keeps its text clear of it.
+// Today is a fixed screen - it never scrolls. The summary card and the two compact
+// tiles below it (Habits, Upcoming Tasks) each take their natural height; each tile
+// opens its own screen. The + button floats at the bottom-right corner.
 export default function TodayScreen() {
   const { today } = useMinuteClock();
+  // Nepal (device region NP, or chosen in Settings) gets the Bikram Sambat date in
+  // Nepali; everywhere else the English date.
+  const calendarType = useStore((s) => s.calendarType);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -29,7 +32,7 @@ export default function TodayScreen() {
         </View>
 
         <Text style={styles.title}>A little better, daily.</Text>
-        <Text style={styles.date}>{formatLongDate(today)}</Text>
+        <Text style={styles.date}>{formatLongDateForCalendar(today, calendarType)}</Text>
 
         <SummaryDashboardCard />
 
@@ -58,6 +61,6 @@ const styles = StyleSheet.create({
   brandActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   title: { ...typography.title, fontSize: 20 },
   date: { ...typography.caption, marginBottom: spacing.sm },
-  // Both tiles live here, 10 dp apart; the second stretches to the bottom.
+  // Both tiles live here, 10 dp apart.
   tiles: { flex: 1, gap: 10, paddingBottom: spacing.sm },
 });
