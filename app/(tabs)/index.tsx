@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { HabitsTile } from "../../components/HabitsTile";
 import { HeaderMenu } from "../../components/HeaderMenu";
-import { ProfileBadge } from "../../components/ProfileBadge";
+import { ShareButton } from "../../components/ShareButton";
 import { FAB_CLEARANCE, SpeedDialFab } from "../../components/SpeedDialFab";
 import { TodayCarousel } from "../../components/TodayCarousel";
 import { UpcomingTasksTile } from "../../components/UpcomingTasksTile";
@@ -26,7 +26,7 @@ export default function TodayScreen() {
         <View style={styles.brandRow}>
           <Text style={styles.brandText}>Habbit</Text>
           <View style={styles.brandActions}>
-            <ProfileBadge />
+            <ShareButton />
             <HeaderMenu />
           </View>
         </View>

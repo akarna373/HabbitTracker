@@ -19,6 +19,25 @@ const ts = require("typescript");
 
 const root = path.resolve(__dirname, "..");
 
+// App code may import Expo and React Native modules that only exist on a phone (notifications,
+// sqlite, ...). When the code under test happens to import them, they are replaced by an inert
+// stand-in, so the pure logic next to them can still be tested. Tests never depend on what a
+// stand-in does; anything that needs the real thing is not tested here.
+const stand_in = new Proxy(function () {}, {
+  get: (_target, key) => (key === "__esModule" ? true : stand_in),
+  apply: () => stand_in,
+  construct: () => stand_in,
+});
+// React Native defines this global; app code reads it.
+globalThis.__DEV__ = false;
+const phoneOnly = /^(expo(-|\/)|@expo\/|react-native)/;
+const inApp = (file) => typeof file === "string" && file.startsWith(root) && !file.includes("node_modules") && !file.includes(`${path.sep}tests${path.sep}`);
+const originalLoad = Module._load;
+Module._load = function load(request, parent, isMain) {
+  if (parent && inApp(parent.filename) && phoneOnly.test(request)) return stand_in;
+  return originalLoad.call(this, request, parent, isMain);
+};
+
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function resolve(request, parent, ...rest) {
   if (request.startsWith(".") && parent && parent.filename && /\.tsx?$/.test(parent.filename)) {

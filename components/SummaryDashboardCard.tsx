@@ -104,21 +104,24 @@ export function SummaryDashboardCard() {
 
           {hasSufficientData ? (
             <>
-              <Text style={styles.primaryLabel}>Potential savings remaining today</Text>
-              {/* Today's spending sits to the right of the big figure, in space that was empty, so the
-                  card does not get any taller. */}
+              {/* Two columns like the row below: both labels on one line, both amounts on the next, so
+                  each amount sits directly under its own label. The short label keeps them side by
+                  side; the full name is still what a screen reader hears. */}
+              <View style={styles.labelRow}>
+                <Text style={[styles.primaryLabel, styles.labelLeft]} numberOfLines={1}>
+                  Potential savings left
+                </Text>
+                <Text style={[styles.primaryLabel, styles.labelRight]} numberOfLines={1}>
+                  Spent today
+                </Text>
+              </View>
               <View style={styles.primaryRow}>
                 <Text style={styles.primaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                   {formatMoneyCompact(summary.potentialSavingsRemainingToday)}
                 </Text>
-                <View style={styles.todaySpend}>
-                  <Text style={styles.todaySpendLabel} numberOfLines={1}>
-                    Spent today
-                  </Text>
-                  <Text style={styles.todaySpendValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                    {formatMoneyCompact(summary.spentToday)}
-                  </Text>
-                </View>
+                <Text style={styles.todaySpendValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {formatMoneyCompact(summary.spentToday)}
+                </Text>
               </View>
 
               <View style={styles.divider} />
@@ -217,11 +220,13 @@ const styles = StyleSheet.create({
   detailsHint: { flexDirection: "row", alignItems: "center", gap: 2, marginLeft: spacing.sm },
   detailsText: { color: colors.accentPink, fontSize: 13, fontWeight: "700" },
   primaryLabel: { color: palette.textDim, fontSize: 13, fontWeight: "600", letterSpacing: 0.3, ...palette.textShadow },
+  labelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  labelLeft: { flexShrink: 1 },
+  labelRight: { flexShrink: 0, textAlign: "right" },
+  // Bottoms line up, so the smaller amount rests on the same line as the big one.
   primaryRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
   primaryValue: { flexShrink: 1, color: palette.text, fontSize: 34, fontWeight: "800", ...palette.textShadow },
-  todaySpend: { alignItems: "flex-end", flexShrink: 0, maxWidth: "42%", paddingBottom: 4 },
-  todaySpendLabel: { color: palette.textDim, fontSize: 12, fontWeight: "600", ...palette.textShadow },
-  todaySpendValue: { color: palette.spent, fontSize: 18, fontWeight: "800", ...palette.textShadow },
+  todaySpendValue: { flexShrink: 0, maxWidth: "42%", paddingBottom: 3, color: palette.spent, fontSize: 22, fontWeight: "800", textAlign: "right", ...palette.textShadow },
   divider: { height: 1, backgroundColor: palette.divider, marginVertical: 6 },
   metricsRow: { flexDirection: "row", gap: spacing.md },
   // minWidth: 0 lets a long value shrink (adjustsFontSizeToFit) instead of
