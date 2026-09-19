@@ -1,123 +1,63 @@
-import { router } from "expo-router";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Card } from "../../components/Card";
+import { HabitsTile } from "../../components/HabitsTile";
 import { HeaderMenu } from "../../components/HeaderMenu";
 import { ProfileBadge } from "../../components/ProfileBadge";
 import { SpeedDialFab } from "../../components/SpeedDialFab";
 import { SummaryDashboardCard } from "../../components/SummaryDashboardCard";
-import { SwipeableHabitTile } from "../../components/SwipeableHabitTile";
-import { formatLongDate, todayISO } from "../../lib/dates";
-import { getTodayDoseTimes } from "../../lib/medicationSchedule";
-import { formatTime12h, isHabitCompleteOn } from "../../lib/progress";
-import { useStore } from "../../lib/store";
+import { UpcomingTasksTile } from "../../components/UpcomingTasksTile";
+import { formatLongDate } from "../../lib/dates";
+import { useMinuteClock } from "../../lib/useMinuteClock";
 import { brandFont, colors, spacing, typography } from "../../lib/theme";
-import type { DailyLog, Habit } from "../../lib/types";
 
+// Today is a fixed screen - it never scrolls. The summary card takes its natural
+// height; the two tiles below (Habits, Upcoming Tasks) share whatever is left, the
+// second one filling it. The + button floats at the bottom-right corner, as it
+// always has; the Upcoming Tasks tile keeps its text clear of it.
 export default function TodayScreen() {
-  const habits = useStore((s) => s.habits);
-  const logsByHabit = useStore((s) => s.logsByHabit);
-  const today = todayISO();
+  const { today } = useMinuteClock();
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <FlatList
-        data={habits}
-        keyExtractor={(h) => h.id}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <View>
-            <View style={styles.brandRow}>
-              <Text style={styles.brandText}>Habbit</Text>
-              <View style={styles.brandActions}>
-                <ProfileBadge />
-                <HeaderMenu />
-              </View>
-            </View>
-
-            <Text style={styles.title}>A little better, daily.</Text>
-            <Text style={styles.date}>{formatLongDate(today)}</Text>
-
-            <SummaryDashboardCard />
+      <View style={styles.page}>
+        <View style={styles.brandRow}>
+          <Text style={styles.brandText}>Habbit</Text>
+          <View style={styles.brandActions}>
+            <ProfileBadge />
+            <HeaderMenu />
           </View>
-        }
-        renderItem={({ item }) => <TodayHabitTile habit={item} logs={logsByHabit[item.id]} today={today} />}
-        ListEmptyComponent={
-          <Card>
-            <Text style={styles.emptyTitle}>No habits yet</Text>
-            <Text style={styles.emptyBody}>Tap + to add your first small change.</Text>
-          </Card>
-        }
-      />
+        </View>
+
+        <Text style={styles.title}>A little better, daily.</Text>
+        <Text style={styles.date}>{formatLongDate(today)}</Text>
+
+        <SummaryDashboardCard />
+
+        <View style={styles.tiles}>
+          <HabitsTile />
+          <UpcomingTasksTile />
+        </View>
+      </View>
 
       <SpeedDialFab />
     </SafeAreaView>
   );
 }
 
-function TodayHabitTile({ habit, logs, today }: { habit: Habit; logs: DailyLog[] | undefined; today: string }) {
-  const log = logs?.find((l) => l.date === today);
-  const done = isHabitCompleteOn(habit, logs, today);
-
-  let subtitle = "";
-  if (habit.kind === "quit") {
-    subtitle = log ? `${log.amount} ${habit.unit ?? ""} logged today` : "Check in this evening";
-  } else if (habit.trackingMethod === "amount") {
-    subtitle = `${log?.amount ?? 0} / ${habit.targetAmount ?? "?"} ${habit.unit ?? ""}`;
-  } else {
-    subtitle = done ? "Checked in" : "Not checked in yet";
-  }
-
-  // dosageFrequency is only ever set for a medication habit - its reminder
-  // line shows the next unlogged dose time today instead of the fixed
-  // reminderTime every other habit uses, since a medication can have
-  // several dose times a day, not just one.
-  const reminderText = habit.dosageFrequency
-    ? getMedicationReminderText(habit, log)
-    : habit.reminderEnabled && habit.reminderTime
-    ? `Reminder ${formatTime12h(habit.reminderTime)}`
-    : null;
-
-  return (
-    <SwipeableHabitTile
-      habit={habit}
-      done={done}
-      subtitle={subtitle}
-      reminderText={reminderText}
-      onPress={() => router.push(`/habit/${habit.id}`)}
-    />
-  );
-}
-
-// Assumes doses are taken in schedule order, since only a daily total is
-// logged, not which specific time slot - the same assumption the calendar
-// screen's per-time tick marks make (see medicine-calendar.tsx).
-function getMedicationReminderText(habit: Habit, log: DailyLog | undefined): string | null {
-  const times = getTodayDoseTimes({
-    dosageFrequency: habit.dosageFrequency,
-    durationType: habit.durationType,
-    startTime: habit.reminderTime ?? "08:00",
-  });
-  if (times.length === 0) return null;
-  const doneCount = log?.amount ?? 0;
-  const nextTime = times[doneCount];
-  return nextTime ? `Next med at ${formatTime12h(nextTime)}` : "All doses taken today";
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  listContent: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
+  page: { flex: 1, paddingHorizontal: spacing.lg },
   brandRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   brandText: { ...brandFont, fontSize: 34 },
   brandActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   title: { ...typography.title, fontSize: 20 },
-  date: { ...typography.caption, marginBottom: spacing.md },
-  emptyTitle: { ...typography.body, fontWeight: "700", marginBottom: 4 },
-  emptyBody: { ...typography.caption },
+  date: { ...typography.caption, marginBottom: spacing.sm },
+  // Both tiles live here, 10 dp apart; the second stretches to the bottom.
+  tiles: { flex: 1, gap: 10, paddingBottom: spacing.sm },
 });

@@ -1,17 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
+import { useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BackgroundPickerSheet } from "../components/BackgroundPickerSheet";
 import { Card } from "../components/Card";
+import { EasterEggTick } from "../components/EasterEggTick";
 import { GoalProgressBar } from "../components/GoalProgressBar";
+import { SummaryBackground } from "../components/SummaryBackground";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { formatMoneyCompact } from "../lib/currency";
 import { computeGoalProgress, type HabitFinancialBreakdown } from "../lib/financialSummary";
 import { useFinancialSummary } from "../lib/financialSummarySelectors";
 import { useStore } from "../lib/store";
-import { SUMMARY_GRADIENT, summaryColors } from "../lib/summaryTheme";
+import { SUMMARY_CARD_RADIUS, summaryColors } from "../lib/summaryTheme";
 import { colors, radii, spacing, typography } from "../lib/theme";
 
 const EMPTY_MESSAGE = "Add cost details to a habit to discover how much you are saving.";
@@ -23,6 +26,9 @@ export default function TodaySummaryScreen() {
 
   const openGoalEditor = () => router.push("/summary-goal");
 
+  // Easter egg: tapping the green tick three times opens the background chooser.
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScreenHeader title="Today’s Summary" subtitle="Your savings and spending, from the days you've logged." />
@@ -30,8 +36,7 @@ export default function TodaySummaryScreen() {
         {summary.hasSufficientData ? (
           <>
             <View style={styles.hero}>
-              <LinearGradient colors={SUMMARY_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: summaryColors.overlay }]} />
+              <SummaryBackground />
               <View style={styles.heroContent}>
                 <Text style={styles.heroLabel}>Potential Savings Today</Text>
                 <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
@@ -47,6 +52,7 @@ export default function TodaySummaryScreen() {
             <Card>
               <StatRow
                 icon="checkmark-circle"
+                iconElement={<EasterEggTick color={summaryColors.saved} onUnlock={() => setPickerOpen(true)} />}
                 iconColor={summaryColors.saved}
                 label="Confirmed savings today"
                 caption={summary.confirmedSavingsToday > 0 ? "From habits you've logged today" : "Log a habit today to confirm a saving"}
@@ -155,12 +161,14 @@ export default function TodaySummaryScreen() {
           </Text>
         </Card>
       </ScrollView>
+      <BackgroundPickerSheet visible={pickerOpen} onClose={() => setPickerOpen(false)} />
     </SafeAreaView>
   );
 }
 
 function StatRow(props: {
   icon: React.ComponentProps<typeof Ionicons>["name"];
+  iconElement?: ReactNode; // replaces the plain icon
   iconColor: string;
   label: string;
   caption: string;
@@ -169,7 +177,7 @@ function StatRow(props: {
 }) {
   return (
     <View style={styles.statRow}>
-      <Ionicons name={props.icon} size={22} color={props.iconColor} />
+      {props.iconElement ?? <Ionicons name={props.icon} size={22} color={props.iconColor} />}
       <View style={styles.statText}>
         <Text style={styles.statLabel}>{props.label}</Text>
         <Text style={styles.cardCaption}>{props.caption}</Text>
@@ -220,11 +228,11 @@ function DetailRow({ label, value, color }: { label: string; value: string; colo
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  hero: { borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,79,139,0.45)", backgroundColor: "#141026" },
+  hero: { borderRadius: SUMMARY_CARD_RADIUS, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,79,139,0.45)", backgroundColor: "#141026" },
   heroContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.lg },
-  heroLabel: { color: summaryColors.textDim, fontSize: 13, fontWeight: "600", letterSpacing: 0.3 },
-  heroValue: { color: summaryColors.text, fontSize: 44, fontWeight: "800", marginTop: 2 },
-  heroCaption: { color: summaryColors.textDim, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
+  heroLabel: { color: summaryColors.textDim, fontSize: 13, fontWeight: "600", letterSpacing: 0.3, ...summaryColors.textShadow },
+  heroValue: { color: summaryColors.text, fontSize: 44, fontWeight: "800", marginTop: 2, ...summaryColors.textShadow },
+  heroCaption: { color: summaryColors.textDim, fontSize: 13, lineHeight: 19, marginTop: spacing.sm, ...summaryColors.textShadow },
   sectionLabel: { ...typography.label, marginTop: spacing.lg, marginBottom: spacing.sm },
   statRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   statText: { flex: 1, minWidth: 0 },

@@ -4,6 +4,8 @@ import { genId } from "./id";
 import { todayISO } from "./dates";
 import { getCurrentLocation } from "./location";
 import { setActiveCurrencyCode } from "./currency";
+import { chooseBackground, pickBackground, SUMMARY_BACKGROUND_COUNT, type BackgroundSelection } from "./backgroundRotation";
+import { loadSummaryBackground, saveSummaryBackground } from "./summaryBackgroundStorage";
 import {
   DEFAULT_FINANCIAL_SETTINGS,
   isValidMonthlyGoal,
@@ -111,6 +113,12 @@ interface StoreState {
   setSwipeSettings: (settings: Partial<SwipeSettings>) => Promise<void>;
   calendarType: CalendarType;
   setCalendarType: (type: CalendarType) => Promise<void>;
+  // Which Summary background is showing and the local date it was chosen (see
+  // lib/backgroundRotation.ts). Chosen in init() / refreshSummaryBackground(),
+  // never while rendering, and untouched by any other store update.
+  summaryBackground: BackgroundSelection;
+  refreshSummaryBackground: () => void;
+  chooseSummaryBackground: (index: number) => void;
   financialSettings: FinancialSettings;
   updateFinancialSettings: (changes: Partial<FinancialSettings>) => Promise<void>;
   init: () => Promise<void>;
@@ -147,6 +155,31 @@ export const useStore = create<StoreState>((set, get) => ({
   swipeSettings: { deleteEnabled: true, archiveEnabled: true },
   calendarType: "gregorian",
   financialSettings: DEFAULT_FINANCIAL_SETTINGS,
+  summaryBackground: { index: 0, date: "" },
+
+  // The easter-egg chooser: picks a background by hand. It starts a fresh
+  // three-day period today, after which the automatic rotation carries on.
+  chooseSummaryBackground: (index) => {
+    const selection = chooseBackground(index, todayISO(), SUMMARY_BACKGROUND_COUNT);
+    if (!selection) return;
+    saveSummaryBackground(selection);
+    set({ summaryBackground: selection });
+  },
+
+  // Called when the Summary card is on screen: at startup, on returning to the
+  // app, and once a minute. Does nothing (no state change, no re-render) until a
+  // two-day period has actually ended.
+  refreshSummaryBackground: () => {
+    const { selection, changed } = pickBackground({
+      stored: get().summaryBackground,
+      today: todayISO(),
+      count: SUMMARY_BACKGROUND_COUNT,
+      random: Math.random,
+    });
+    if (!changed) return;
+    saveSummaryBackground(selection);
+    set({ summaryBackground: selection });
+  },
 
   setSwipeSettings: async (partial) => {
     const next = { ...get().swipeSettings, ...partial };
@@ -218,6 +251,8 @@ export const useStore = create<StoreState>((set, get) => ({
     );
     setActiveCurrencyCode(financialSettings.currencyCode);
 
+    const summaryBackground = loadSummaryBackground(todayISO());
+
     const smokeLocationRows = await db.getAllAsync<SmokeLocation>("SELECT * FROM smoke_locations");
     const smokeLocationsByHabit: Record<string, SmokeLocation[]> = {};
     for (const row of smokeLocationRows) {
@@ -244,6 +279,7 @@ export const useStore = create<StoreState>((set, get) => ({
       swipeSettings,
       calendarType,
       financialSettings,
+      summaryBackground,
     });
 
     // Android clears registered geofences on reboot, so re-register on every

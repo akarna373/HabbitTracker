@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
@@ -8,10 +7,11 @@ import { formatMoneyCompact, formatMoneyFull } from "../lib/currency";
 import { computeGoalProgress } from "../lib/financialSummary";
 import { useFinancialSummary } from "../lib/financialSummarySelectors";
 import { useStore } from "../lib/store";
-import { SUMMARY_GRADIENT, summaryColors as palette } from "../lib/summaryTheme";
+import { SUMMARY_CARD_RADIUS, summaryColors as palette } from "../lib/summaryTheme";
 import { colors, spacing } from "../lib/theme";
 import { useReducedMotion } from "../lib/useReducedMotion";
 import { GoalProgressBar } from "./GoalProgressBar";
+import { SummaryBackground } from "./SummaryBackground";
 
 const EMPTY_MESSAGE = "Add cost details to a habit to discover how much you are saving.";
 
@@ -60,19 +60,12 @@ export function SummaryDashboardCard() {
     : `Today's Summary. ${EMPTY_MESSAGE}`;
 
   return (
-    // Layers, bottom to top: gradient, dark overlay, a full-card Pressable (so
+    // Layers, bottom to top: background (scene + dark layer), a full-card Pressable (so
     // every visible pixel, edges included, opens the summary), then the content.
     // The content ignores touches except the goal button, so a tap on any text
     // falls through to the Pressable underneath.
     <Animated.View style={[styles.frame, { transform: [{ scale }] }]}>
-      <LinearGradient
-        colors={SUMMARY_GRADIENT}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      <View style={[StyleSheet.absoluteFill, styles.overlay]} pointerEvents="none" />
+      <SummaryBackground />
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={openSummary}
@@ -190,36 +183,35 @@ export function SummaryDashboardCard() {
 const styles = StyleSheet.create({
   frame: {
     width: "100%",
-    borderRadius: 24,
+    borderRadius: SUMMARY_CARD_RADIUS,
     overflow: "hidden",
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: "rgba(255,79,139,0.45)",
     backgroundColor: "#141026",
   },
-  overlay: { backgroundColor: palette.overlay },
   content: { paddingHorizontal: spacing.md, paddingVertical: 18 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
   titleGroup: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
-  title: { color: palette.text, fontSize: 16, fontWeight: "700", flexShrink: 1 },
+  title: { color: palette.text, fontSize: 16, fontWeight: "700", flexShrink: 1, ...palette.textShadow },
   detailsHint: { flexDirection: "row", alignItems: "center", gap: 2, marginLeft: spacing.sm },
   detailsText: { color: colors.accentPink, fontSize: 13, fontWeight: "700" },
-  primaryLabel: { color: palette.textDim, fontSize: 13, fontWeight: "600", letterSpacing: 0.3 },
-  primaryValue: { color: palette.text, fontSize: 38, fontWeight: "800", marginTop: 2 },
+  primaryLabel: { color: palette.textDim, fontSize: 13, fontWeight: "600", letterSpacing: 0.3, ...palette.textShadow },
+  primaryValue: { color: palette.text, fontSize: 38, fontWeight: "800", marginTop: 2, ...palette.textShadow },
   divider: { height: 1, backgroundColor: palette.divider, marginVertical: spacing.md },
   metricsRow: { flexDirection: "row", gap: spacing.md },
   // minWidth: 0 lets a long value shrink (adjustsFontSizeToFit) instead of
   // pushing the neighbouring column off the card.
   metric: { flex: 1, minWidth: 0 },
   metricLabelRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 },
-  metricLabel: { color: palette.textDim, fontSize: 12, fontWeight: "600", flexShrink: 1 },
-  metricValue: { fontSize: 24, fontWeight: "800" },
+  metricLabel: { color: palette.textDim, fontSize: 12, fontWeight: "600", flexShrink: 1, ...palette.textShadow },
+  metricValue: { fontSize: 24, fontWeight: "800", ...palette.textShadow },
   goalBlock: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: palette.divider },
   goalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   goalTitleGroup: { flexDirection: "row", alignItems: "center", gap: 6 },
-  goalTitle: { color: palette.textDim, fontSize: 13, fontWeight: "700" },
-  goalPercent: { color: palette.text, fontSize: 15, fontWeight: "800" },
-  goalAmounts: { color: palette.text, fontSize: 14, fontWeight: "600", marginTop: 4, marginBottom: 8 },
+  goalTitle: { color: palette.textDim, fontSize: 13, fontWeight: "700", ...palette.textShadow },
+  goalPercent: { color: palette.text, fontSize: 15, fontWeight: "800", ...palette.textShadow },
+  goalAmounts: { color: palette.text, fontSize: 14, fontWeight: "600", marginTop: 4, marginBottom: 8, ...palette.textShadow },
   goalChip: {
     alignSelf: "flex-start",
     flexDirection: "row",
@@ -235,5 +227,5 @@ const styles = StyleSheet.create({
   },
   goalChipPressed: { opacity: 0.8 },
   goalChipText: { color: colors.accentPink, fontSize: 13, fontWeight: "700" },
-  emptyText: { color: palette.text, fontSize: 15, lineHeight: 22 },
+  emptyText: { color: palette.text, fontSize: 15, lineHeight: 22, ...palette.textShadow },
 });
