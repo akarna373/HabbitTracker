@@ -15,10 +15,18 @@ import { SummaryDashboardCard } from "./SummaryDashboardCard";
 // one movement instead of two flat panels sliding past each other.
 const SIDE_SCALE = 0.94;
 const SIDE_OPACITY = 0.55;
-// Page dots: each sits in a slot of this width; a single indicator glides across them.
+// How the swipe settles. "normal" glides to the next card; "fast" (the earlier setting)
+// stops almost at once on Android and felt abrupt. A number between 0.9 (fast) and
+// 0.99 (slow) also works.
+const DECELERATION = "normal";
+// Page dots: each sits in a slot of this width. The active one is a pill that moves
+// like a drop of liquid: its leading edge runs ahead and its trailing edge lags, so it
+// stretches between two dots and then pulls back together.
 const SLOT = 16;
-const INDICATOR_WIDTH = 12;
-const INDICATOR_STRETCH = 1.5; // how much the indicator stretches half-way between two dots
+const DOT = 6;
+const PILL_HALF = 3; // at rest the pill is DOT + 2 * PILL_HALF = 12 wide
+const STRETCH_POWER = 2.5; // higher = the edges part more in the middle of a move
+const STEPS = 10; // samples per page-to-page move (the curve is piecewise linear)
 const FRAME_BORDER = 1;
 
 // The swipeable card area at the top of Today. The frame and the rotating scene behind
@@ -64,22 +72,39 @@ export function TodayCarousel() {
     if (next > 0 && Math.abs(next - pageWidth) > 0.5) setPageWidth(next);
   };
 
-  // Indicator: slides one slot per page and stretches in the middle of each move.
+  // The pill is two round caps joined by a bar, so it stays a clean pill at any length
+  // (stretching one shape would squash its rounded ends). Both caps follow the scroll
+  // position: the leading one eases out, the trailing one eases in. Everything is a
+  // native-driver interpolation of the scroll offset, so it tracks the finger exactly,
+  // forwards and backwards.
   const indicator = useMemo(() => {
-    const last = Math.max(pageCount - 1, 1);
-    const translateX = scrollX.interpolate({
-      inputRange: [0, pageWidth * last],
-      outputRange: [0, SLOT * last],
-      extrapolate: "clamp",
-    });
-    const stops: number[] = [];
-    const stretch: number[] = [];
-    for (let i = 0; i <= last * 2; i++) {
-      stops.push((pageWidth * i) / 2);
-      stretch.push(i % 2 === 0 ? 1 : INDICATOR_STRETCH);
+    const last = pageCount - 1;
+    if (last < 1) return null;
+    const inputs: number[] = [];
+    const trail: number[] = []; // centre of the trailing cap
+    const lead: number[] = []; // centre of the leading cap
+    for (let i = 0; i < last; i++) {
+      const rest = i * SLOT + SLOT / 2;
+      for (let k = 0; k < STEPS; k++) {
+        const t = k / STEPS;
+        inputs.push((i + t) * pageWidth);
+        trail.push(rest - PILL_HALF + SLOT * Math.pow(t, STRETCH_POWER));
+        lead.push(rest + PILL_HALF + SLOT * (1 - Math.pow(1 - t, STRETCH_POWER)));
+      }
     }
-    const scaleX = scrollX.interpolate({ inputRange: stops, outputRange: stretch, extrapolate: "clamp" });
-    return { translateX, scaleX };
+    const finalRest = last * SLOT + SLOT / 2;
+    inputs.push(last * pageWidth);
+    trail.push(finalRest - PILL_HALF);
+    lead.push(finalRest + PILL_HALF);
+
+    const follow = (outputRange: number[]) => scrollX.interpolate({ inputRange: inputs, outputRange, extrapolate: "clamp" });
+    return {
+      trailingCap: follow(trail.map((x) => x - DOT / 2)),
+      leadingCap: follow(lead.map((x) => x - DOT / 2)),
+      // A 1-dp-wide bar scaled to the gap between the two cap centres.
+      barX: follow(trail.map((x, k) => (x + lead[k]) / 2 - 0.5)),
+      barScale: follow(trail.map((x, k) => lead[k] - x)),
+    };
   }, [scrollX, pageWidth, pageCount]);
 
   const renderPage = (key: string, index: number, node: React.ReactNode) => {
@@ -109,7 +134,7 @@ export function TodayCarousel() {
         showsHorizontalScrollIndicator={false}
         snapToInterval={pageWidth}
         snapToAlignment="start"
-        decelerationRate="fast"
+        decelerationRate={DECELERATION}
         disableIntervalMomentum
         overScrollMode="never"
         scrollEventThrottle={16}
@@ -134,9 +159,15 @@ export function TodayCarousel() {
                 <View style={styles.dot} />
               </View>
             ))}
-            <Animated.View
-              style={[styles.indicator, { transform: [{ translateX: indicator.translateX }, { scaleX: indicator.scaleX }] }]}
-            />
+            {indicator ? (
+              <>
+                <Animated.View style={[styles.cap, { transform: [{ translateX: indicator.trailingCap }] }]} />
+                <Animated.View style={[styles.cap, { transform: [{ translateX: indicator.leadingCap }] }]} />
+                <Animated.View
+                  style={[styles.bar, { transform: [{ translateX: indicator.barX }, { scaleX: indicator.barScale }] }]}
+                />
+              </>
+            ) : null}
           </View>
         </View>
       ) : null}
@@ -158,16 +189,9 @@ const styles = StyleSheet.create({
   // Takes any height the frame's minimum adds, so every page fills the frame.
   scroller: { flexGrow: 1 },
   dots: { position: "absolute", left: 0, right: 0, bottom: 8, alignItems: "center" },
-  dotRow: { flexDirection: "row", height: 6, alignItems: "center" },
-  slot: { width: SLOT, height: 6, alignItems: "center", justifyContent: "center" },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.35)" },
-  indicator: {
-    position: "absolute",
-    left: (SLOT - INDICATOR_WIDTH) / 2,
-    top: 0,
-    width: INDICATOR_WIDTH,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#FFFFFF",
-  },
+  dotRow: { flexDirection: "row", height: DOT, alignItems: "center" },
+  slot: { width: SLOT, height: DOT, alignItems: "center", justifyContent: "center" },
+  dot: { width: DOT, height: DOT, borderRadius: DOT / 2, backgroundColor: "rgba(255,255,255,0.35)" },
+  cap: { position: "absolute", left: 0, top: 0, width: DOT, height: DOT, borderRadius: DOT / 2, backgroundColor: "#FFFFFF" },
+  bar: { position: "absolute", left: 0, top: 0, width: 1, height: DOT, backgroundColor: "#FFFFFF" },
 });
